@@ -77,7 +77,7 @@ const as = (username, extra = {}) => ({ cookie: cookies[username], ...extra });
 test('login sets a hardened session cookie and never returns the token in the body', async () => {
   const r = await login('admin');
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { username: 'admin', role: 'admin', mfa_enabled: false });
+  assert.deepEqual(r.body, { username: 'admin', role: 'admin', mfa_enabled: false, mfa_enforced: false, must_change_password: false });
   const setCookie = r.headers['Set-Cookie'];
   assert.match(setCookie, /^__Host-dk_sid=[A-Za-z0-9_-]{43};/);
   assert.match(setCookie, /HttpOnly/);
@@ -445,4 +445,87 @@ test('OTP routes do not exist when no app key is configured', async () => {
   const plain = createApi({ store: memoryStore(), vault, now: () => clock });
   assert.equal((await call(plain, { method: 'POST', url: '/api/mfa/setup', body: {} })).status, 404);
   assert.throws(() => createApi({ store: memoryStore(), vault, requireMfa: true }), /requireMfa needs appKey/);
+});
+
+// ---------- staff management ----------
+const TEMP_PW = 'temporary-password-123';
+const signIn = (username, password) => call(handle, { method: 'POST', url: '/api/login', body: { username, password } });
+const cookieOf = (r) => /__Host-dk_sid=([^;]+)/.exec(r.headers['Set-Cookie'])[1];
+
+test('only an admin can add staff, and the input is validated', async () => {
+  await login('admin');
+  await login('revenue');
+  const make = (who, body) => call(handle, as(who, { method: 'POST', url: '/api/users', body }));
+  assert.equal((await make('revenue', { username: 'newbie', role: 'health', password: TEMP_PW })).status, 403);
+  assert.equal((await make('admin', { username: 'New Bie', role: 'health', password: TEMP_PW })).status, 400);
+  assert.equal((await make('admin', { username: 'newbie', role: 'superuser', password: TEMP_PW })).status, 400);
+  assert.equal((await make('admin', { username: 'newbie', role: 'health', password: 'short' })).status, 400);
+  const ok = await make('admin', { username: 'Newbie', role: 'health', password: TEMP_PW });
+  assert.equal(ok.status, 201);
+  assert.deepEqual(ok.body, { username: 'newbie', role: 'health' });
+  assert.equal((await make('admin', { username: 'newbie', role: 'health', password: TEMP_PW })).status, 409);
+  const entry = store._audit.find((a) => a.action === 'user_create');
+  assert.equal(entry.detail, 'newbie:health');
+  assert.equal(JSON.stringify(store._audit).includes(TEMP_PW), false);
+});
+
+test('a new account must replace its temporary password before doing anything else', async () => {
+  await login('admin');
+  await call(handle, as('admin', { method: 'POST', url: '/api/users', body: { username: 'newbie', role: 'revenue', password: TEMP_PW } }));
+  const first = await signIn('newbie', TEMP_PW);
+  assert.equal(first.status, 200);
+  assert.equal(first.body.must_change_password, true);
+  const cookie = cookieOf(first);
+  assert.equal((await call(handle, { url: '/api/me', cookie })).status, 200);
+  const blocked = await call(handle, { url: '/api/taxpayers/anyone', cookie });
+  assert.equal(blocked.status, 403);
+  assert.equal(blocked.body.error, 'password_change_required');
+  const changed = await call(handle, { method: 'POST', url: '/api/password', cookie,
+    body: { current_password: TEMP_PW, new_password: 'my-own-long-password' } });
+  assert.equal(changed.status, 200);
+  assert.equal((await call(handle, { url: '/api/me', cookie })).status, 401); // sessions ended
+  assert.equal((await signIn('newbie', TEMP_PW)).status, 401);
+  const again = await signIn('newbie', 'my-own-long-password');
+  assert.equal(again.body.must_change_password, false);
+  assert.equal((await call(handle, { url: '/api/taxpayers/anyone', cookie: cookieOf(again) })).status, 404);
+});
+
+test('closing an account ends its sessions and blocks sign-in; reopening restores it', async () => {
+  await login('admin');
+  await login('revenue');
+  assert.equal((await call(handle, as('admin', { method: 'POST', url: '/api/users/admin/disable', body: {} }))).body.error, 'cannot_disable_self');
+  assert.equal((await call(handle, as('admin', { method: 'POST', url: '/api/users/revenue/disable', body: {} }))).status, 200);
+  assert.equal((await call(handle, as('revenue', { url: '/api/me' }))).status, 401);
+  const wrong = await signIn('revenue', 'wrong-password-here');
+  const closed = await signIn('revenue', PW);
+  assert.equal(closed.status, 401);
+  assert.deepEqual(closed.body, wrong.body); // a closed account looks like a wrong password
+  assert.equal((await call(handle, as('admin', { method: 'POST', url: '/api/users/revenue/enable', body: {} }))).status, 200);
+  assert.equal((await signIn('revenue', PW)).status, 200);
+  assert.deepEqual(store._audit.filter((a) => a.action.startsWith('user_')).map((a) => a.action), ['user_disable', 'user_enable']);
+  assert.equal((await call(handle, as('admin', { method: 'POST', url: '/api/users/nobody/disable', body: {} }))).status, 404);
+});
+
+test('an admin can set a temporary password, which ends sessions and forces a change', async () => {
+  await login('admin');
+  await login('finance');
+  const reset = (who, name, password) => call(handle, as(who, { method: 'POST', url: `/api/users/${name}/password`, body: { password } }));
+  assert.equal((await reset('admin', 'finance', 'short')).status, 400);
+  assert.equal((await reset('admin', 'admin', TEMP_PW)).body.error, 'use_password_page');
+  assert.equal((await reset('finance', 'revenue', TEMP_PW)).status, 403);
+  assert.equal((await reset('admin', 'finance', TEMP_PW)).status, 200);
+  assert.equal((await call(handle, as('finance', { url: '/api/me' }))).status, 401);
+  assert.equal((await signIn('finance', PW)).status, 401);
+  assert.equal((await signIn('finance', TEMP_PW)).body.must_change_password, true);
+  assert.equal(JSON.stringify(store._audit).includes(TEMP_PW), false);
+});
+
+test('the staff list is admin-only and never exposes secrets', async () => {
+  await login('admin');
+  await login('revenue');
+  assert.equal((await call(handle, as('revenue', { url: '/api/users' }))).status, 403);
+  const list = await call(handle, as('admin', { url: '/api/users' }));
+  assert.equal(list.status, 200);
+  assert.deepEqual(list.body.users.map((u) => u.username), ['admin', 'finance', 'health', 'revenue']);
+  assert.equal(/password_hash|totp_secret|scrypt/.test(list.raw), false);
 });

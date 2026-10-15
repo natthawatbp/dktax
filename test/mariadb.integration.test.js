@@ -80,13 +80,13 @@ async function login(username, password = PW) {
   return r.status === 200 ? /__Host-dk_sid=([^;]+)/.exec(r.headers['Set-Cookie'])[1] : null;
 }
 
-test('app account cannot change or delete audit rows, or delete taxpayers or users', { skip }, async () => {
+test('app account cannot change or delete audit rows, delete taxpayers or users, or change roles', { skip }, async () => {
   await assert.rejects(app.query("UPDATE audit_log SET actor = 'x'"), /denied|command/i);
   await assert.rejects(app.query('DELETE FROM audit_log'), /denied|command/i);
   await assert.rejects(app.query('DELETE FROM taxpayers'), /denied|command/i);
   await assert.rejects(app.query('DELETE FROM users'), /denied|command/i);
-  await assert.rejects(app.query('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)',
-    ['evil', 'x', 'admin']), /denied|command/i);
+  // Adding staff is allowed (admins do it through the API), but changing who has which role is not.
+  await assert.rejects(app.query("UPDATE users SET role = 'admin'"), /denied|command/i);
 });
 
 test('triggers block audit changes even for the owner account', { skip }, async () => {
@@ -195,3 +195,32 @@ function callWithCookie(url, cookieHeader, body) {
     Promise.resolve(api(req, res, url)).catch(reject);
   });
 }
+
+test('staff management on a real database: add, force change, close, list', { skip }, async () => {
+  const adminCookie = await login('admin');
+  const made = await call('/api/users', { method: 'POST', cookie: adminCookie,
+    body: { username: 'newstaff', role: 'health', password: 'temporary-password-123' } });
+  assert.equal(made.status, 201);
+  const [[row]] = await admin.query("SELECT password_hash, must_change_password, disabled FROM users WHERE username = 'newstaff'");
+  assert.equal(row.must_change_password, 1);
+  assert.equal(row.password_hash.startsWith('scrypt$'), true);
+  assert.equal(row.password_hash.includes('temporary-password-123'), false);
+
+  const first = await call('/api/login', { method: 'POST', body: { username: 'newstaff', password: 'temporary-password-123' } });
+  assert.equal(first.body.must_change_password, true);
+  const staffCookie = /__Host-dk_sid=([^;]+)/.exec(first.headers['Set-Cookie'])[1];
+  const blocked = await call('/api/taxpayers/tp-100', { cookie: staffCookie });
+  assert.equal(blocked.body.error, 'password_change_required');
+
+  const list = await call('/api/users', { cookie: adminCookie });
+  assert.equal(list.status, 200);
+  assert.equal(/password_hash|totp_secret|scrypt/.test(list.raw), false);
+  assert.ok(list.body.users.some((u) => u.username === 'newstaff'));
+
+  assert.equal((await call('/api/users/newstaff/disable', { method: 'POST', cookie: adminCookie, body: {} })).status, 200);
+  const [[closed]] = await admin.query("SELECT disabled FROM users WHERE username = 'newstaff'");
+  assert.equal(closed.disabled, 1);
+  assert.equal((await call('/api/me', { cookie: staffCookie })).status, 401); // existing session no longer works
+  const [sessions] = await admin.query('SELECT COUNT(*) AS n FROM sessions s JOIN users u ON u.id = s.user_id WHERE u.username = ?', ['newstaff']);
+  assert.equal(Number(sessions[0].n), 0);
+});

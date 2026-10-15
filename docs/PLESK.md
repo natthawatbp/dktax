@@ -114,6 +114,24 @@ OTP is on by default. Every account must set up an authenticator app before it c
 
 **If another staff member loses the phone:** an admin signs in and uses **รีเซ็ต OTP ของเจ้าหน้าที่** on the login page.
 
+## 8d. Add and manage staff from the web page
+
+**One-time database update (existing databases only):** in phpMyAdmin → SQL tab, run `db/migrations/002-user-management.sql`. It is safe to run twice.
+
+**What an admin can do on `/login.html`, in the section "จัดการเจ้าหน้าที่":**
+- **Add a staff member:** username, role, and a temporary password of at least 12 characters. Tell the person the temporary password directly (in person or by phone), never in a public chat.
+- **See the list:** shows each person's role, whether OTP is on, and whether they still have a temporary password. It never shows passwords.
+- **Close an account:** the person is signed out at once and cannot sign in again. Use this when someone leaves. An admin cannot close their own account.
+- **Open an account again.**
+- **Set a new temporary password:** for someone who forgot theirs. Every device of that person is signed out.
+
+**What the new staff member does on first sign-in:**
+1. Sign in with the username and the temporary password.
+2. The page asks for a new password. Choose one of at least 12 characters. They are signed out and sign in again with it.
+3. The page asks to set up OTP. Follow the steps in section 8c.
+
+**Database permission:** the app account now needs `INSERT` on `users` permanently (it can no longer be taken back after the first admin), and `UPDATE` on the columns `password_hash`, `must_change_password` and `disabled`. It never needs to change `role`. On Plesk the account already has full rights; the lines in `db/init/02-grants.sql` are what to ask the hosting provider to apply when you restrict it.
+
 ## 9. Security checklist
 - Plesk: enable HSTS for the domain (SSL/TLS settings).
 - Keep MariaDB bound to localhost. Do not open port 3306 in the firewall.

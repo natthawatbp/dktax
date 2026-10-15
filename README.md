@@ -112,6 +112,10 @@ Enabled when `DB_HOST` is set. Without it, `/api/*` returns 404 and the static s
 | `POST /api/mfa/setup` | any session | Starts OTP setup and returns the setup key for an authenticator app. |
 | `POST /api/mfa/enable` | any session | Confirms setup with a code from the app. |
 | `POST /api/password` | any session | Changes the password. Needs the current one and ends every session. |
+| `GET /api/users` | admin | Staff list (never includes passwords or OTP secrets). |
+| `POST /api/users` | admin | Adds staff with a temporary password. The person must change it at first sign-in. |
+| `POST /api/users/:username/disable`, `/enable` | admin | Closes or reopens an account. Closing ends its sessions immediately. |
+| `POST /api/users/:username/password` | admin | Sets a new temporary password and ends the person's sessions. |
 | `POST /api/users/:username/mfa/reset` | admin | Clears a colleague's OTP so they must enroll again. |
 | `POST /api/logout` | any session | Deletes the session. |
 | `GET /api/me` | any session | Current user and role. |

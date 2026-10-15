@@ -107,6 +107,35 @@
     </form>
   </div>
 
+  <div id="section-users" class="hidden">
+    <h2>จัดการเจ้าหน้าที่ (ผู้ดูแลระบบ)</h2>
+    <p class="hint">เพิ่มเจ้าหน้าที่ใหม่ด้วยรหัสผ่านชั่วคราว ผู้นั้นต้องตั้งรหัสผ่านของตัวเองและตั้งค่า OTP เมื่อล็อกอินครั้งแรก แจ้งรหัสชั่วคราวให้เจ้าหน้าที่โดยตรง ห้ามส่งผ่านช่องทางสาธารณะ</p>
+    <form id="user-form">
+      <label>ชื่อผู้ใช้ (อังกฤษพิมพ์เล็ก ตัวเลข _ . - ยาว 3–32 ตัว)<input id="u-name" autocomplete="off" required></label>
+      <label>บทบาท
+        <select id="u-role" style="width:100%; padding:10px; margin-top:4px; border:1px solid #ccc; border-radius:8px; font-size:1rem;">
+          <option value="revenue">เจ้าหน้าที่จัดเก็บรายได้</option>
+          <option value="finance">เจ้าหน้าที่การเงิน</option>
+          <option value="health">เจ้าหน้าที่สาธารณสุข</option>
+          <option value="exec">ผู้บริหาร</option>
+          <option value="admin">ผู้ดูแลระบบ</option>
+        </select>
+      </label>
+      <label>รหัสผ่านชั่วคราว (อย่างน้อย 12 ตัว)<input id="u-pass" type="password" autocomplete="new-password" required minlength="12"></label>
+      <button type="submit">เพิ่มเจ้าหน้าที่</button>
+    </form>
+    <h2>รายชื่อเจ้าหน้าที่</h2>
+    <button type="button" class="secondary" id="users-refresh">แสดงรายชื่อ</button>
+    <div id="users-list"></div>
+    <h2>ตั้งรหัสผ่านชั่วคราวใหม่ให้เจ้าหน้าที่</h2>
+    <p class="hint">ใช้เมื่อเจ้าหน้าที่ลืมรหัสผ่าน ทุกเครื่องของผู้นั้นจะถูกออกจากระบบ และต้องตั้งรหัสใหม่เอง</p>
+    <form id="temp-form">
+      <label>ชื่อผู้ใช้ของเจ้าหน้าที่<input id="t-name" autocomplete="off" required></label>
+      <label>รหัสผ่านชั่วคราวใหม่ (อย่างน้อย 12 ตัว)<input id="t-pass" type="password" autocomplete="new-password" required minlength="12"></label>
+      <button type="submit">ตั้งรหัสชั่วคราว</button>
+    </form>
+  </div>
+
   <div id="section-reset" class="hidden">
     <h2>รีเซ็ต OTP ของเจ้าหน้าที่ (ผู้ดูแลระบบ)</h2>
     <p class="hint">ใช้เมื่อเจ้าหน้าที่ทำโทรศัพท์หาย ผู้นั้นจะต้องตั้งค่า OTP ใหม่ตอนล็อกอินครั้งถัดไป</p>
@@ -140,6 +169,11 @@
     forbidden: 'บัญชีนี้ไม่มีสิทธิ์ทำรายการนี้',
     mfa_setup_required: 'ต้องตั้งค่ารหัส OTP ก่อนใช้งาน',
     already_enabled: 'บัญชีนี้เปิดใช้ OTP แล้ว',
+    password_change_required: 'ต้องเปลี่ยนรหัสผ่านชั่วคราวก่อนใช้งาน',
+    invalid_username: 'ชื่อผู้ใช้ต้องเป็นตัวอักษรอังกฤษพิมพ์เล็ก ตัวเลข _ . - ยาว 3–32 ตัว',
+    invalid_role: 'เลือกบทบาทไม่ถูกต้อง',
+    cannot_disable_self: 'ปิดบัญชีของตัวเองไม่ได้',
+    use_password_page: 'รหัสผ่านของตัวเองให้เปลี่ยนในส่วน "เปลี่ยนรหัสผ่าน" ด้านล่าง',
     setup_first: 'กรุณากดเริ่มตั้งค่าก่อน',
     same_password: 'รหัสผ่านใหม่ต้องต่างจากรหัสผ่านเดิม',
     weak_password: 'รหัสผ่านใหม่ต้องมีอย่างน้อย 12 ตัว',
@@ -171,7 +205,7 @@
   const errText = (data, status) => ERRORS[data.error] || (status === 429 ? ERRORS.too_many_requests : 'เกิดข้อผิดพลาด ลองใหม่อีกครั้ง');
   // A 403 for a missing OTP can happen on any action: send the person to setup.
   const handleFailure = (data, status, msgId) => {
-    if (data.error === 'mfa_setup_required') { api('GET', '/api/me').then((r) => r.status === 200 && enter(r.data)); return; }
+    if (data.error === 'mfa_setup_required' || data.error === 'password_change_required') { api('GET', '/api/me').then((r) => r.status === 200 && enter(r.data)); return; }
     show(msgId, errText(data, status), false);
   };
 
@@ -189,7 +223,15 @@
     $('result').style.display = 'none';
     hideMsg('panel-msg');
     const role = user.role;
-    const ready = Boolean(user.mfa_enabled);
+    // A temporary password must be replaced first: show only the password section.
+    const mustChange = Boolean(user.must_change_password);
+    if (mustChange) {
+      for (const id of ['section-mfa', 'section-register', 'section-lookup', 'section-view', 'section-reveal', 'section-users', 'section-reset']) $(id).classList.add('hidden');
+      show('panel-msg', 'รหัสผ่านของคุณเป็นรหัสชั่วคราว กรุณาเปลี่ยนรหัสผ่านด้านล่างก่อนใช้งาน', false);
+      return;
+    }
+    // When the server does not enforce OTP, nothing is hidden behind it.
+    const ready = !user.mfa_enforced || Boolean(user.mfa_enabled);
     // Until OTP is set up the server refuses everything else, so only show the setup section.
     $('section-mfa').classList.toggle('hidden', ready);
     $('section-register').classList.toggle('hidden', !(ready && ['admin', 'revenue'].includes(role)));
@@ -197,6 +239,7 @@
     $('section-view').classList.toggle('hidden', !ready);
     $('section-reveal').classList.toggle('hidden', !(ready && role === 'admin'));
     $('section-reset').classList.toggle('hidden', !(ready && role === 'admin'));
+    $('section-users').classList.toggle('hidden', !(ready && role === 'admin'));
   }
   function leave() {
     showOnly('login-card');
@@ -281,6 +324,57 @@
     $('p-old').value = ''; $('p-new').value = ''; $('p-new2').value = '';
     if (status === 200) { leave(); show('login-msg', 'เปลี่ยนรหัสผ่านสำเร็จ กรุณาเข้าสู่ระบบด้วยรหัสใหม่', true); }
     else show('panel-msg', errText(data, status), false);
+  });
+
+  const roleLabel = (r) => ROLE_NAMES[r] || r;
+  async function loadUsers() {
+    const { status, data } = await api('GET', '/api/users');
+    const box = $('users-list');
+    box.textContent = '';
+    if (status !== 200) return handleFailure(data, status, 'panel-msg');
+    for (const u of data.users) {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:8px 0; border-bottom:1px solid #e5e8ec;';
+      const info = document.createElement('div');
+      info.style.flex = '1 1 220px';
+      const flags = [u.disabled ? 'ปิดบัญชีแล้ว' : null, u.must_change_password ? 'รอเปลี่ยนรหัสผ่าน' : null, u.totp_enabled ? 'OTP เปิดใช้' : 'ยังไม่ตั้ง OTP'].filter(Boolean);
+      info.textContent = u.username + ' · ' + roleLabel(u.role) + ' · ' + flags.join(', ');
+      row.appendChild(info);
+      const mk = (label, action) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'secondary';
+        b.style.margin = '0';
+        b.textContent = label;
+        b.addEventListener('click', action);
+        row.appendChild(b);
+      };
+      mk(u.disabled ? 'เปิดบัญชี' : 'ปิดบัญชี', async () => {
+        if (!u.disabled && !window.confirm('ปิดบัญชี ' + u.username + ' ใช่หรือไม่? ผู้นั้นจะถูกออกจากระบบทันที')) return;
+        const r = await api('POST', '/api/users/' + encodeURIComponent(u.username) + (u.disabled ? '/enable' : '/disable'), {});
+        if (r.status === 200) { show('panel-msg', (u.disabled ? 'เปิดบัญชี ' : 'ปิดบัญชี ') + u.username + ' แล้ว', true); loadUsers(); }
+        else handleFailure(r.data, r.status, 'panel-msg');
+      });
+      box.appendChild(row);
+    }
+    if (data.users.length === 0) box.textContent = 'ยังไม่มีรายชื่อ';
+  }
+  $('users-refresh').addEventListener('click', loadUsers);
+  $('user-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const { status, data } = await api('POST', '/api/users', { username: $('u-name').value, role: $('u-role').value, password: $('u-pass').value });
+    $('u-pass').value = '';
+    if (status === 201) { show('panel-msg', 'เพิ่มเจ้าหน้าที่ ' + data.username + ' แล้ว แจ้งรหัสชั่วคราวให้ผู้นั้นโดยตรง', true); $('u-name').value = ''; loadUsers(); }
+    else handleFailure(data, status, 'panel-msg');
+  });
+  $('temp-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = $('t-name').value.trim();
+    if (!window.confirm('ตั้งรหัสชั่วคราวใหม่ให้ ' + name + ' ใช่หรือไม่? ผู้นั้นจะถูกออกจากระบบทุกเครื่อง')) return;
+    const { status, data } = await api('POST', '/api/users/' + encodeURIComponent(name) + '/password', { password: $('t-pass').value });
+    $('t-pass').value = '';
+    if (status === 200) { show('panel-msg', 'ตั้งรหัสชั่วคราวให้ ' + name + ' แล้ว แจ้งรหัสให้ผู้นั้นโดยตรง', true); $('t-name').value = ''; }
+    else handleFailure(data, status, 'panel-msg');
   });
 
   // If a session already exists, go straight to the panel.
