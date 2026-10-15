@@ -67,3 +67,15 @@ Known limits (not fixable in a static bundle):
 - The rate limiter is per process and in memory. Under a real load balancer, rate limiting belongs at the reverse proxy as well.
 - CDN scripts are pinned with Subresource Integrity, but Bootstrap and Font Awesome CSS are not.
 - Docker build and the container itself are not verified in the environment where this was written (no Docker daemon there). The server was verified directly with Node.
+
+## National ID handling (`lib/national-id-vault.js`)
+
+Field-level encryption module for เลขประจำตัวประชาชน. It is a building block only: nothing in the server or the UI calls it yet, and no database exists in this repo.
+
+- AES-256-GCM per record, with a random DEK wrapped by a versioned KEK. Ciphertext is bound to the taxpayer id and key version through AAD, so moving or altering a row fails authentication.
+- Lookups use `HMAC-SHA256` with a separate index key (blind index), never a plain hash.
+- `mask()` shows only the last four digits. `toStorable()` / `fromStorable()` give plain strings for DB columns.
+- Keys are passed in by the caller. The module does not read environment variables or files. Keys must come from a KMS, Vault or Docker secrets.
+- Tests: `npm test` (18 tests covering tampering, row swaps, wrong keys, rotation, and plaintext absence).
+
+**Before production:** the check-digit algorithm (mod 11) is the standard published one, but verify it against real records held by the municipality. Do not rely on a sample ID from memory.
