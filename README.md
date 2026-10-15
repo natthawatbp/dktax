@@ -15,7 +15,9 @@ Entry point: `public/Index.html` (self-contained bundle).
 
 ## Data storage
 
-There is **no server-side database** in this bundle. Mock taxpayer data lives in the page (`ui_kits/web-app/data.js`).
+There is **no server-side database** in this bundle. The sample data (demo accounts, taxpayers, licences, history, notifications, transactions, registrants) has been **cleared** from `ui_kits/web-app/data.js` and from the deployed `public/Index.html`.
+
+**Consequence:** the account list is empty, so nobody can log in yet. Accounts must be added in code or by a real back-end before the app is usable.
 The only persisted state is in each browser's `localStorage`:
 
 | Key           | Purpose                    |
@@ -24,7 +26,7 @@ The only persisted state is in each browser's `localStorage`:
 | `dk_settings` | payment / LINE OA settings |
 | `dk_page`     | last visited page          |
 
-Clearing these keys (or the site data for the domain) resets the app for that browser.
+Clearing these keys (or the site data for the domain) resets the app for that browser. This does not clear anything on the server.
 
 ## Run locally
 
@@ -59,7 +61,7 @@ Hardening in this build:
 
 Known limits (not fixable in a static bundle):
 
-- **Authentication is client-side mock data.** `admin/admin1234` and the other demo accounts are in the shipped JavaScript. Anyone can read them and access the UI. Do not put real taxpayer data behind this build until a server-side auth backend exists.
+- **Authentication is client-side only.** The account list is empty, and the login check runs in the browser, so any account added to the bundle is readable by anyone who loads the page. Do not put real taxpayer data behind this build until a server-side auth backend exists.
 - `script-src` and `style-src` allow `'unsafe-inline'` because the bundled app and React style props need it. This weakens XSS protection; removing it requires a rebuilt bundle with hashed or external scripts.
 - `ui_kits/web-app/promptpay.js` builds the payment QR by sending the PromptPay payload (tax ID, amount, reference) to `api.qrserver.com`. That is a third-party disclosure of payment data. The CSP blocks that image in the browser, so QR display will not work until QR generation is moved to a local library. The deployed `public/Index.html` does not appear to call that host.
 - The rate limiter is per process and in memory. Under a real load balancer, rate limiting belongs at the reverse proxy as well.
