@@ -92,6 +92,28 @@ Use this only once, right after the database is set up. Each step is a single ac
 
 After this, all other staff accounts must be created by an admin with a process still to be built. Until then, the only account that can be added is the admin set up above.
 
+## 8c. Turn on OTP (one-time codes) for everyone
+
+OTP is on by default. Every account must set up an authenticator app before it can use the system. To switch it off for testing only, set `MFA_REQUIRED` to `0`.
+
+**For a database that already exists (the one you created before OTP was added):**
+1. Plesk → Databases → `donkaew_dktax` → phpMyAdmin → **SQL** tab.
+2. Paste the contents of `db/migrations/001-totp.sql` and press **Go**. It is safe to run twice.
+3. Upload the new files into `dk-one-tax-bill`, press **NPM install**, then **Restart App**.
+
+**What each person does the first time they sign in:**
+1. Sign in at `/login.html` with the username and password.
+2. The page asks for OTP setup. Press **เริ่มตั้งค่า**.
+3. On the phone, open Google Authenticator or Microsoft Authenticator → add an account → enter a setup key. Type the key shown on the page.
+4. Type the 6-digit code the app shows, and press confirm.
+5. From then on, every sign-in asks for the password and then a 6-digit code.
+
+**If the only admin loses the phone:** in phpMyAdmin (SQL tab) run
+`UPDATE users SET totp_secret = NULL, totp_enabled = 0, totp_last_step = 0 WHERE username = 'admin';`
+(change `admin` to the right username). The admin signs in with the password and sets up OTP again.
+
+**If another staff member loses the phone:** an admin signs in and uses **รีเซ็ต OTP ของเจ้าหน้าที่** on the login page.
+
 ## 9. Security checklist
 - Plesk: enable HSTS for the domain (SSL/TLS settings).
 - Keep MariaDB bound to localhost. Do not open port 3306 in the firewall.

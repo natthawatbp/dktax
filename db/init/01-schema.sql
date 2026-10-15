@@ -20,6 +20,9 @@ CREATE TABLE IF NOT EXISTS users (
   role          ENUM('admin', 'revenue', 'finance', 'health', 'exec') NOT NULL,
   failed_logins INT NOT NULL DEFAULT 0,
   locked_until  DATETIME(3) NULL,
+  totp_secret   TEXT NULL,
+  totp_enabled  TINYINT(1) NOT NULL DEFAULT 0,
+  totp_last_step BIGINT UNSIGNED NOT NULL DEFAULT 0,
   created_at    DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   CONSTRAINT username_format CHECK (username REGEXP '^[a-z0-9_.-]{3,32}$')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

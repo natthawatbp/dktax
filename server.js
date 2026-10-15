@@ -17,11 +17,18 @@ const ROOT = path.resolve(__dirname, 'public');
 let api = null;
 if (process.env.DB_HOST) {
   const mysql = require('mysql2/promise');
-  const { loadVault, loadPoolConfig } = require('./lib/config');
+  const { loadVault, loadAppKey, loadPoolConfig } = require('./lib/config');
   const { mysqlStore } = require('./lib/store');
   const { createApi } = require('./lib/api');
   const pool = mysql.createPool(loadPoolConfig());
-  api = createApi({ store: mysqlStore(pool), vault: loadVault(), setupToken: process.env.SETUP_TOKEN || null });
+  api = createApi({
+    store: mysqlStore(pool),
+    vault: loadVault(),
+    setupToken: process.env.SETUP_TOKEN || null,
+    appKey: loadAppKey(),
+    // OTP is required for every account unless explicitly switched off with MFA_REQUIRED=0.
+    requireMfa: process.env.MFA_REQUIRED !== '0',
+  });
 }
 
 // Whitelist: anything not listed here (including .md, .jsx, .json, .sh) is never served.

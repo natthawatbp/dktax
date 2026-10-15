@@ -108,6 +108,11 @@ Enabled when `DB_HOST` is set. Without it, `/api/*` returns 404 and the static s
 | Method & path | Roles | What it does |
 |---|---|---|
 | `POST /api/login` | anyone | Starts a session. Sets `__Host-dk_sid` (HttpOnly, Secure, SameSite=Strict). Locks the account for 15 minutes after 5 failures. |
+| `POST /api/login/otp` | pending login | Second step when OTP is on: a 6-digit code. Each code works once. |
+| `POST /api/mfa/setup` | any session | Starts OTP setup and returns the setup key for an authenticator app. |
+| `POST /api/mfa/enable` | any session | Confirms setup with a code from the app. |
+| `POST /api/password` | any session | Changes the password. Needs the current one and ends every session. |
+| `POST /api/users/:username/mfa/reset` | admin | Clears a colleague's OTP so they must enroll again. |
 | `POST /api/logout` | any session | Deletes the session. |
 | `GET /api/me` | any session | Current user and role. |
 | `POST /api/taxpayers` | admin, revenue | Registers a taxpayer. Body: `{taxpayer_id, national_id}`. Returns only the masked ID. |
@@ -119,6 +124,7 @@ Enabled when `DB_HOST` is set. Without it, `/api/*` returns 404 and the static s
 Rules that apply to every route:
 - Roles are checked on the server. The UI is not trusted.
 - Writes require `Content-Type: application/json`. Together with `SameSite=Strict`, this blocks cross-site form posts.
+- OTP (RFC 6238, 6 digits) is required for every account unless `MFA_REQUIRED=0`. Until an account enrolls, it can only reach the OTP setup and password routes. OTP secrets are stored encrypted. A code cannot be reused, and wrong codes count toward the 5-attempt lockout.
 - Each account can open at most 100 records (views plus lookups) per hour, so a stolen account cannot dump the whole table. Over the limit returns `view_limit`.
 - Errors return a short code (`invalid_credentials`, `forbidden`, ...) with no internal detail.
 - National IDs never appear in logs, audit rows or error messages.

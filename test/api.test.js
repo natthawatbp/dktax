@@ -7,6 +7,7 @@ const { createApi, SESSION_COOKIE } = require('../lib/api');
 const { createNationalIdVault, checkDigit } = require('../lib/national-id-vault');
 const { memoryStore } = require('../lib/store');
 const { hashPassword } = require('../lib/passwords');
+const totp = require('../lib/totp');
 
 const validId = (twelve) => twelve + checkDigit(twelve);
 const NID = validId('110170020345');
@@ -14,7 +15,7 @@ const NID2 = validId('220170020345');
 const PW = 'test-password-long-enough';
 
 // Minimal request/response doubles that exercise the real handlers.
-function call(handle, { method = 'GET', url = '/', body, cookie, contentType = 'application/json', headers = {} } = {}) {
+function call(handle, { method = 'GET', url = '/', body, cookie, rawCookie, contentType = 'application/json', headers = {} } = {}) {
   const payload = body === undefined ? '' : JSON.stringify(body);
   const req = Readable.from(payload ? [Buffer.from(payload)] : []);
   req.method = method;
@@ -23,6 +24,7 @@ function call(handle, { method = 'GET', url = '/', body, cookie, contentType = '
     ...(contentType ? { 'content-type': contentType } : {}),
     ...(payload ? { 'content-length': String(Buffer.byteLength(payload)) } : {}),
     ...(cookie ? { cookie: `${SESSION_COOKIE}=${cookie}` } : {}),
+    ...(rawCookie ? { cookie: rawCookie } : {}),
     ...headers,
   };
   return new Promise((resolve, reject) => {
@@ -75,7 +77,7 @@ const as = (username, extra = {}) => ({ cookie: cookies[username], ...extra });
 test('login sets a hardened session cookie and never returns the token in the body', async () => {
   const r = await login('admin');
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { username: 'admin', role: 'admin' });
+  assert.deepEqual(r.body, { username: 'admin', role: 'admin', mfa_enabled: false });
   const setCookie = r.headers['Set-Cookie'];
   assert.match(setCookie, /^__Host-dk_sid=[A-Za-z0-9_-]{43};/);
   assert.match(setCookie, /HttpOnly/);
@@ -298,4 +300,149 @@ test('an account cannot open more than 100 records per hour', async () => {
   clock = new Date(clock.getTime() + 61 * 60 * 1000);
   await login('revenue');
   assert.equal((await call(handle, as('revenue', { url: '/api/taxpayers/tp-1' }))).status, 200);
+});
+
+// ---------- OTP, password change and admin reset ----------
+async function mfaWorld() {
+  const st = memoryStore(() => clock);
+  const key = crypto.randomBytes(32);
+  const api = createApi({ store: st, vault, now: () => clock, appKey: key, requireMfa: true });
+  for (const [username, role] of [['boss', 'admin'], ['staff', 'revenue']]) {
+    st.addUser({ username, passwordHash: await hashPassword(PW), role });
+  }
+  const post = (url, body, cookieHeader) => call(api, { method: 'POST', url, body, rawCookie: cookieHeader });
+  const get = (url, cookieHeader) => call(api, { url, rawCookie: cookieHeader });
+  const sid = (r) => /__Host-dk_sid=([^;]+)/.exec(r.headers['Set-Cookie'])?.[1];
+  const sidCookie = (r) => `__Host-dk_sid=${sid(r)}`;
+  // Enroll an account: login without OTP, set up, confirm with a code.
+  async function enroll(username) {
+    const r = await post('/api/login', { username, password: PW });
+    const cookie = sidCookie(r);
+    const setup = await post('/api/mfa/setup', {}, cookie);
+    const enabled = await post('/api/mfa/enable', { code: totp.codeAt(setup.body.secret, clock) }, cookie);
+    assert.equal(enabled.status, 200);
+    return setup.body.secret;
+  }
+  return { st, api, key, post, get, sid, sidCookie, enroll };
+}
+
+test('without OTP an account can only reach setup and password routes', async () => {
+  const w = await mfaWorld();
+  const r = await w.post('/api/login', { username: 'staff', password: PW });
+  assert.equal(r.status, 200);
+  const cookie = w.sidCookie(r);
+  assert.equal((await w.get('/api/me', cookie)).body.mfa_enabled, false);
+  assert.equal((await w.get('/api/taxpayers/tp-1', cookie)).status, 403);
+  assert.equal((await w.get('/api/taxpayers/tp-1', cookie)).body.error, 'mfa_setup_required');
+  assert.equal((await w.post('/api/mfa/setup', {}, cookie)).status, 200);
+});
+
+test('setup returns an authenticator secret, and enabling needs a correct code', async () => {
+  const w = await mfaWorld();
+  const cookie = w.sidCookie(await w.post('/api/login', { username: 'staff', password: PW }));
+  const setup = await w.post('/api/mfa/setup', {}, cookie);
+  assert.match(setup.body.secret, /^[A-Z2-7]{32}$/);
+  assert.match(setup.body.otpauth_uri, /^otpauth:\/\/totp\/DK%20One%20Tax%20Bill:staff\?secret=/);
+  assert.equal((await w.post('/api/mfa/enable', { code: '000000' }, cookie)).status, 401);
+  assert.equal((await w.post('/api/mfa/enable', { code: totp.codeAt(setup.body.secret, clock) }, cookie)).status, 200);
+  assert.equal((await w.get('/api/me', cookie)).body.mfa_enabled, true);
+  assert.equal((await w.post('/api/mfa/setup', {}, cookie)).status, 409);
+});
+
+test('the stored OTP secret is encrypted', async () => {
+  const w = await mfaWorld();
+  const secret = await w.enroll('staff');
+  const stored = (await w.st.findUserByUsername('staff')).totp_secret;
+  assert.equal(String(stored).includes(secret), false);
+});
+
+test('with OTP on, the password alone gives no session; the right code does', async () => {
+  const w = await mfaWorld();
+  const secret = await w.enroll('staff');
+  clock = new Date(clock.getTime() + 60 * 1000);
+  const first = await w.post('/api/login', { username: 'staff', password: PW });
+  assert.deepEqual(first.body, { mfa_required: true });
+  assert.equal(/__Host-dk_sid=/.test(first.headers['Set-Cookie']), false);
+  const pending = /__Host-dk_mfa=[^;]+/.exec(first.headers['Set-Cookie'])[0];
+  assert.equal((await w.get('/api/me', pending)).status, 401); // pending token is not a session
+  assert.equal((await w.post('/api/login/otp', { code: '000000' }, pending)).status, 401);
+  const ok = await w.post('/api/login/otp', { code: totp.codeAt(secret, clock) }, pending);
+  assert.equal(ok.status, 200);
+  assert.equal((await w.get('/api/me', w.sidCookie(ok))).body.username, 'staff');
+});
+
+test('an OTP code cannot be reused', async () => {
+  const w = await mfaWorld();
+  const secret = await w.enroll('staff');
+  clock = new Date(clock.getTime() + 60 * 1000);
+  const code = totp.codeAt(secret, clock);
+  const pendingOf = async () => /__Host-dk_mfa=[^;]+/.exec((await w.post('/api/login', { username: 'staff', password: PW })).headers['Set-Cookie'])[0];
+  assert.equal((await w.post('/api/login/otp', { code }, await pendingOf())).status, 200);
+  assert.equal((await w.post('/api/login/otp', { code }, await pendingOf())).status, 401);
+});
+
+test('pending tokens that are forged, tampered or expired are refused', async () => {
+  const w = await mfaWorld();
+  const secret = await w.enroll('staff');
+  clock = new Date(clock.getTime() + 60 * 1000);
+  const code = totp.codeAt(secret, clock);
+  const user = await w.st.findUserByUsername('staff');
+  assert.equal((await w.post('/api/login/otp', { code }, '__Host-dk_mfa=garbage')).status, 401);
+  assert.equal((await w.post('/api/login/otp', { code }, `__Host-dk_mfa=${user.id}.${clock.getTime() + 60000}.AAAA`)).status, 401);
+  const first = await w.post('/api/login', { username: 'staff', password: PW });
+  const pending = /__Host-dk_mfa=[^;]+/.exec(first.headers['Set-Cookie'])[0];
+  clock = new Date(clock.getTime() + 6 * 60 * 1000); // past the 5-minute limit
+  assert.equal((await w.post('/api/login/otp', { code: totp.codeAt(secret, clock) }, pending)).status, 401);
+});
+
+test('five wrong OTP codes lock the account', async () => {
+  const w = await mfaWorld();
+  const secret = await w.enroll('staff');
+  clock = new Date(clock.getTime() + 60 * 1000);
+  const first = await w.post('/api/login', { username: 'staff', password: PW });
+  const pending = /__Host-dk_mfa=[^;]+/.exec(first.headers['Set-Cookie'])[0];
+  for (let i = 0; i < 5; i++) await w.post('/api/login/otp', { code: '111111' }, pending);
+  assert.equal((await w.post('/api/login/otp', { code: totp.codeAt(secret, clock) }, pending)).status, 401);
+  assert.equal((await w.post('/api/login', { username: 'staff', password: PW })).status, 401);
+});
+
+test('changing the password needs the current one, enforces length, and ends all sessions', async () => {
+  const w = await mfaWorld();
+  const r = await w.post('/api/login', { username: 'staff', password: PW });
+  const cookie = w.sidCookie(r);
+  assert.equal((await w.post('/api/password', { current_password: 'wrong-password-x', new_password: 'another-long-password' }, cookie)).status, 401);
+  assert.equal((await w.post('/api/password', { current_password: PW, new_password: 'short' }, cookie)).status, 400);
+  assert.equal((await w.post('/api/password', { current_password: PW, new_password: PW }, cookie)).status, 400);
+  const ok = await w.post('/api/password', { current_password: PW, new_password: 'another-long-password' }, cookie);
+  assert.equal(ok.status, 200);
+  assert.equal((await w.get('/api/me', cookie)).status, 401);
+  assert.equal((await w.post('/api/login', { username: 'staff', password: PW })).status, 401);
+  assert.equal((await w.post('/api/login', { username: 'staff', password: 'another-long-password' })).status, 200);
+});
+
+test('an admin can reset a colleague OTP; others cannot', async () => {
+  const w = await mfaWorld();
+  const secrets = { boss: await w.enroll('boss'), staff: await w.enroll('staff') };
+  clock = new Date(clock.getTime() + 60 * 1000);
+  const signIn = async (username) => {
+    const first = await w.post('/api/login', { username, password: PW });
+    const pending = /__Host-dk_mfa=[^;]+/.exec(first.headers['Set-Cookie'])[0];
+    return w.sidCookie(await w.post('/api/login/otp', { code: totp.codeAt(secrets[username], clock) }, pending));
+  };
+  const adminSession = await signIn('boss');
+  clock = new Date(clock.getTime() + 60 * 1000); // next code window, since each code works once
+  const staffSession = await signIn('staff');
+
+  assert.equal((await w.post('/api/users/boss/mfa/reset', {}, staffSession)).status, 403);
+  assert.equal((await w.post('/api/users/nobody/mfa/reset', {}, adminSession)).status, 404);
+  assert.equal((await w.post('/api/users/staff/mfa/reset', {}, adminSession)).status, 200);
+  assert.equal((await w.st.findUserByUsername('staff')).totp_enabled, 0);
+  assert.equal((await w.get('/api/me', staffSession)).status, 401); // their sessions ended
+  assert.equal(w.st._audit.some((a) => a.action === 'mfa_reset' && a.detail === 'staff'), true);
+});
+
+test('OTP routes do not exist when no app key is configured', async () => {
+  const plain = createApi({ store: memoryStore(), vault, now: () => clock });
+  assert.equal((await call(plain, { method: 'POST', url: '/api/mfa/setup', body: {} })).status, 404);
+  assert.throws(() => createApi({ store: memoryStore(), vault, requireMfa: true }), /requireMfa needs appKey/);
 });

@@ -10,7 +10,7 @@
   h1 { font-size: 1.3rem; color: #153e75; margin-top: 0; }
   h2 { font-size: 1.05rem; color: #153e75; margin: 22px 0 6px; }
   label { display: block; margin-top: 12px; font-weight: 600; }
-  input, select { width: 100%; box-sizing: border-box; padding: 10px; margin-top: 4px; border: 1px solid #ccc; border-radius: 8px; font-size: 1rem; }
+  input { width: 100%; box-sizing: border-box; padding: 10px; margin-top: 4px; border: 1px solid #ccc; border-radius: 8px; font-size: 1rem; }
   button { margin-top: 14px; padding: 10px 18px; background: #153e75; color: #fff; border: 0; border-radius: 8px; font-size: 1rem; cursor: pointer; }
   button.secondary { background: #6c757d; }
   .msg { margin-top: 12px; padding: 10px; border-radius: 8px; display: none; }
@@ -18,10 +18,13 @@
   .err { background: #f8d7da; color: #721c24; }
   .hint { color: #6c757d; font-size: .9rem; }
   .result { margin-top: 10px; padding: 10px; background: #f4f6f9; border-radius: 8px; white-space: pre-wrap; display: none; }
+  .key { font-family: monospace; font-size: 1.2rem; letter-spacing: 2px; padding: 12px; background: #f4f6f9; border-radius: 8px; word-break: break-all; margin-top: 8px; }
   .hidden { display: none; }
+  hr { border: 0; border-top: 1px solid #e5e8ec; margin: 22px 0 0; }
 </style>
 </head>
 <body>
+
 <div class="card" id="login-card">
   <h1>เข้าสู่ระบบ</h1>
   <form id="login-form">
@@ -32,12 +35,42 @@
   <div id="login-msg" class="msg"></div>
 </div>
 
+<div class="card hidden" id="otp-card">
+  <h1>ยืนยันตัวตนอีกขั้น</h1>
+  <p class="hint">เปิดแอป Authenticator บนโทรศัพท์ แล้วใส่รหัส 6 หลักของ DK One Tax Bill รหัสเปลี่ยนทุก 30 วินาที</p>
+  <form id="otp-form">
+    <label>รหัส 6 หลัก<input id="o-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required></label>
+    <button type="submit">ยืนยัน</button>
+    <button type="button" class="secondary" id="otp-back">ย้อนกลับ</button>
+  </form>
+  <div id="otp-msg" class="msg"></div>
+</div>
+
 <div class="card hidden" id="panel">
   <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
     <div>ผู้ใช้: <b id="who"></b> (<span id="role"></span>)</div>
     <button class="secondary" id="logout">ออกจากระบบ</button>
   </div>
   <div id="panel-msg" class="msg"></div>
+
+  <div id="section-mfa" class="hidden">
+    <h2>ตั้งค่ารหัส OTP (ต้องทำก่อนใช้งาน)</h2>
+    <p class="hint">บัญชีนี้ต้องมีรหัส OTP จากแอป Authenticator (เช่น Google Authenticator หรือ Microsoft Authenticator) ก่อนจึงจะใช้งานระบบได้</p>
+    <button type="button" id="mfa-start">เริ่มตั้งค่า</button>
+    <div id="mfa-steps" class="hidden">
+      <ol>
+        <li>เปิดแอป Authenticator แล้วเลือก <b>เพิ่มบัญชี</b></li>
+        <li>เลือก <b>ป้อนคีย์ตั้งค่า</b> (หรือ Enter a setup key)</li>
+        <li>ชื่อบัญชีใส่ <b>DK One Tax Bill</b> แล้วใส่คีย์ด้านล่าง เลือกประเภท <b>ตามเวลา (Time based)</b></li>
+      </ol>
+      <div class="key" id="mfa-key"></div>
+      <p class="hint">เก็บคีย์นี้เป็นความลับ ห้ามส่งให้ใคร เมื่อเพิ่มแล้ว แอปจะแสดงรหัส 6 หลัก</p>
+      <form id="mfa-form">
+        <label>รหัส 6 หลักที่แอปแสดง<input id="m-code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required></label>
+        <button type="submit">ยืนยันและเปิดใช้</button>
+      </form>
+    </div>
+  </div>
 
   <div id="section-register" class="hidden">
     <h2>ลงทะเบียนผู้เสียภาษี</h2>
@@ -65,8 +98,8 @@
   </div>
 
   <div id="section-reveal" class="hidden">
-    <h2>เปิดเลขเต็ม (ผู้ดูแลระบบเท่านั้น)</h2>
-    <p class="hint">ต้องระบุเหตุผล ระบบจะบันทึกทุกครั้ง และจำกัดไม่เกิน 10 ครั้งต่อชั่วโมง</p>
+    <h2>เปิดเลขเต็มพร้อมบันทึกเหตุผล (ผู้ดูแลระบบ)</h2>
+    <p class="hint">จำกัดไม่เกิน 10 ครั้งต่อชั่วโมง และบันทึกทุกครั้ง</p>
     <form id="reveal-form">
       <label>รหัสผู้เสียภาษีภายใน<input id="x-id" required></label>
       <label>เหตุผล (อย่างน้อย 10 ตัวอักษร)<input id="x-reason" required minlength="10" maxlength="200"></label>
@@ -74,15 +107,42 @@
     </form>
   </div>
 
+  <div id="section-reset" class="hidden">
+    <h2>รีเซ็ต OTP ของเจ้าหน้าที่ (ผู้ดูแลระบบ)</h2>
+    <p class="hint">ใช้เมื่อเจ้าหน้าที่ทำโทรศัพท์หาย ผู้นั้นจะต้องตั้งค่า OTP ใหม่ตอนล็อกอินครั้งถัดไป</p>
+    <form id="reset-form">
+      <label>ชื่อผู้ใช้ของเจ้าหน้าที่<input id="z-user" required></label>
+      <button type="submit">รีเซ็ต OTP</button>
+    </form>
+  </div>
+
   <div id="result" class="result"></div>
+
+  <hr>
+  <div id="section-password">
+    <h2>เปลี่ยนรหัสผ่าน</h2>
+    <p class="hint">หลังเปลี่ยน ทุกเครื่องที่ล็อกอินอยู่จะถูกออกจากระบบ</p>
+    <form id="password-form">
+      <label>รหัสผ่านปัจจุบัน<input id="p-old" type="password" autocomplete="current-password" required></label>
+      <label>รหัสผ่านใหม่ (อย่างน้อย 12 ตัว)<input id="p-new" type="password" autocomplete="new-password" required minlength="12"></label>
+      <label>พิมพ์รหัสผ่านใหม่อีกครั้ง<input id="p-new2" type="password" autocomplete="new-password" required minlength="12"></label>
+      <button type="submit">เปลี่ยนรหัสผ่าน</button>
+    </form>
+  </div>
 </div>
 
 <script>
   const ROLE_NAMES = { admin: 'ผู้ดูแลระบบ', revenue: 'เจ้าหน้าที่จัดเก็บรายได้', finance: 'เจ้าหน้าที่การเงิน', health: 'เจ้าหน้าที่สาธารณสุข', exec: 'ผู้บริหาร' };
   const ERRORS = {
     invalid_credentials: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง',
+    invalid_code: 'รหัส OTP ไม่ถูกต้องหรือหมดอายุ ลองรหัสใหม่ที่แอปแสดง',
     unauthenticated: 'กรุณาเข้าสู่ระบบอีกครั้ง',
     forbidden: 'บัญชีนี้ไม่มีสิทธิ์ทำรายการนี้',
+    mfa_setup_required: 'ต้องตั้งค่ารหัส OTP ก่อนใช้งาน',
+    already_enabled: 'บัญชีนี้เปิดใช้ OTP แล้ว',
+    setup_first: 'กรุณากดเริ่มตั้งค่าก่อน',
+    same_password: 'รหัสผ่านใหม่ต้องต่างจากรหัสผ่านเดิม',
+    weak_password: 'รหัสผ่านใหม่ต้องมีอย่างน้อย 12 ตัว',
     invalid_national_id: 'เลขประจำตัวไม่ถูกต้อง ตรวจว่ามี 13 หลักและพิมพ์ถูก',
     invalid_taxpayer_id: 'รหัสผู้เสียภาษีมีอักขระที่ไม่อนุญาต',
     already_exists: 'มีข้อมูลนี้อยู่แล้ว',
@@ -95,7 +155,9 @@
 
   const $ = (id) => document.getElementById(id);
   const show = (id, text, ok) => { const m = $(id); m.textContent = text; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.style.display = 'block'; };
+  const hideMsg = (id) => { $(id).style.display = 'none'; };
   const showResult = (text) => { const r = $('result'); r.textContent = text; r.style.display = 'block'; };
+  const chunk = (s) => s.match(/.{1,4}/g).join(' ');
 
   async function api(method, url, body) {
     const r = await fetch(url, {
@@ -107,61 +169,117 @@
     return { status: r.status, data };
   }
   const errText = (data, status) => ERRORS[data.error] || (status === 429 ? ERRORS.too_many_requests : 'เกิดข้อผิดพลาด ลองใหม่อีกครั้ง');
+  // A 403 for a missing OTP can happen on any action: send the person to setup.
+  const handleFailure = (data, status, msgId) => {
+    if (data.error === 'mfa_setup_required') { api('GET', '/api/me').then((r) => r.status === 200 && enter(r.data)); return; }
+    show(msgId, errText(data, status), false);
+  };
 
   // Shows the full ID when the server sent it (admin, revenue, finance); otherwise the masked form.
   const describe = (d) => 'รหัสผู้เสียภาษี: ' + d.taxpayer_id + '\nเลขประจำตัว: ' + (d.national_id || d.nid_masked);
 
+  function showOnly(card) {
+    for (const id of ['login-card', 'otp-card', 'panel']) $(id).classList.toggle('hidden', id !== card);
+  }
+
   function enter(user) {
-    $('login-card').classList.add('hidden');
-    $('panel').classList.remove('hidden');
+    showOnly('panel');
     $('who').textContent = user.username;
     $('role').textContent = ROLE_NAMES[user.role] || user.role;
+    $('result').style.display = 'none';
+    hideMsg('panel-msg');
     const role = user.role;
-    const canRegister = ['admin', 'revenue'].includes(role);
-    const canLookup = ['admin', 'revenue', 'finance'].includes(role);
-    $('section-register').classList.toggle('hidden', !canRegister);
-    $('section-lookup').classList.toggle('hidden', !canLookup);
-    $('section-view').classList.remove('hidden');
-    $('section-reveal').classList.toggle('hidden', role !== 'admin');
+    const ready = Boolean(user.mfa_enabled);
+    // Until OTP is set up the server refuses everything else, so only show the setup section.
+    $('section-mfa').classList.toggle('hidden', ready);
+    $('section-register').classList.toggle('hidden', !(ready && ['admin', 'revenue'].includes(role)));
+    $('section-lookup').classList.toggle('hidden', !(ready && ['admin', 'revenue', 'finance'].includes(role)));
+    $('section-view').classList.toggle('hidden', !ready);
+    $('section-reveal').classList.toggle('hidden', !(ready && role === 'admin'));
+    $('section-reset').classList.toggle('hidden', !(ready && role === 'admin'));
   }
   function leave() {
-    $('panel').classList.add('hidden');
-    $('login-card').classList.remove('hidden');
+    showOnly('login-card');
     $('result').style.display = 'none';
+    $('l-pass').value = '';
+    $('o-code').value = '';
   }
 
   $('login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    hideMsg('login-msg');
     const { status, data } = await api('POST', '/api/login', { username: $('l-user').value, password: $('l-pass').value });
-    if (status === 200) { $('l-pass').value = ''; enter(data); }
-    else show('login-msg', errText(data, status), false);
+    $('l-pass').value = '';
+    if (status !== 200) return show('login-msg', errText(data, status), false);
+    if (data.mfa_required) { showOnly('otp-card'); hideMsg('otp-msg'); $('o-code').focus(); return; }
+    enter(data);
   });
+  $('otp-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const { status, data } = await api('POST', '/api/login/otp', { code: $('o-code').value });
+    $('o-code').value = '';
+    if (status === 200) enter(data);
+    else show('otp-msg', errText(data, status), false);
+  });
+  $('otp-back').addEventListener('click', leave);
   $('logout').addEventListener('click', async () => { await api('POST', '/api/logout', {}); leave(); });
+
+  $('mfa-start').addEventListener('click', async () => {
+    const { status, data } = await api('POST', '/api/mfa/setup', {});
+    if (status !== 200) return show('panel-msg', errText(data, status), false);
+    $('mfa-key').textContent = chunk(data.secret);
+    $('mfa-steps').classList.remove('hidden');
+    hideMsg('panel-msg');
+  });
+  $('mfa-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const { status, data } = await api('POST', '/api/mfa/enable', { code: $('m-code').value });
+    if (status !== 200) return show('panel-msg', errText(data, status), false);
+    $('m-code').value = '';
+    $('mfa-key').textContent = '';
+    $('mfa-steps').classList.add('hidden');
+    const me = await api('GET', '/api/me');
+    if (me.status === 200) { enter(me.data); show('panel-msg', 'เปิดใช้ OTP สำเร็จ', true); }
+  });
 
   $('register-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const { status, data } = await api('POST', '/api/taxpayers', { taxpayer_id: $('r-id').value, national_id: $('r-nid').value });
     if (status === 201) { show('panel-msg', 'บันทึกสำเร็จ เลขที่บันทึก: ' + data.nid_masked, true); $('r-nid').value = ''; }
-    else show('panel-msg', errText(data, status), false);
+    else handleFailure(data, status, 'panel-msg');
   });
   $('lookup-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const { status, data } = await api('POST', '/api/taxpayers/lookup', { national_id: $('s-nid').value });
     if (status === 200) showResult(describe(data));
-    else show('panel-msg', errText(data, status), false);
+    else handleFailure(data, status, 'panel-msg');
   });
   $('view-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const id = encodeURIComponent($('v-id').value);
-    const { status, data } = await api('GET', '/api/taxpayers/' + id);
+    const { status, data } = await api('GET', '/api/taxpayers/' + encodeURIComponent($('v-id').value));
     if (status === 200) showResult(describe(data));
-    else show('panel-msg', errText(data, status), false);
+    else handleFailure(data, status, 'panel-msg');
   });
   $('reveal-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const id = encodeURIComponent($('x-id').value);
-    const { status, data } = await api('POST', '/api/taxpayers/' + id + '/reveal', { reason: $('x-reason').value });
+    const { status, data } = await api('POST', '/api/taxpayers/' + encodeURIComponent($('x-id').value) + '/reveal', { reason: $('x-reason').value });
     if (status === 200) { showResult('เลขเต็ม: ' + data.national_id + '\n(ข้อมูลนี้ถูกบันทึกในประวัติแล้ว)'); $('x-reason').value = ''; }
+    else handleFailure(data, status, 'panel-msg');
+  });
+  $('reset-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = $('z-user').value.trim();
+    if (!window.confirm('รีเซ็ต OTP ของ ' + name + ' ใช่หรือไม่?')) return;
+    const { status, data } = await api('POST', '/api/users/' + encodeURIComponent(name) + '/mfa/reset', {});
+    if (status === 200) { show('panel-msg', 'รีเซ็ต OTP ของ ' + name + ' แล้ว ผู้นั้นต้องตั้งค่าใหม่ตอนล็อกอินครั้งถัดไป', true); $('z-user').value = ''; }
+    else handleFailure(data, status, 'panel-msg');
+  });
+  $('password-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if ($('p-new').value !== $('p-new2').value) return show('panel-msg', 'รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน', false);
+    const { status, data } = await api('POST', '/api/password', { current_password: $('p-old').value, new_password: $('p-new').value });
+    $('p-old').value = ''; $('p-new').value = ''; $('p-new2').value = '';
+    if (status === 200) { leave(); show('login-msg', 'เปลี่ยนรหัสผ่านสำเร็จ กรุณาเข้าสู่ระบบด้วยรหัสใหม่', true); }
     else show('panel-msg', errText(data, status), false);
   });
 

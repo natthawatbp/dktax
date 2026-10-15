@@ -12,6 +12,7 @@ const { createApi, SESSION_COOKIE } = require('../lib/api');
 const { createNationalIdVault, checkDigit } = require('../lib/national-id-vault');
 const { mysqlStore } = require('../lib/store');
 const { hashPassword } = require('../lib/passwords');
+const totp = require('../lib/totp');
 
 const enabled = Boolean(process.env.TEST_ADMIN_URL && process.env.TEST_APP_URL);
 const skip = enabled ? false : 'set TEST_ADMIN_URL and TEST_APP_URL to run';
@@ -61,7 +62,7 @@ before(async () => {
   const vault = createNationalIdVault({
     keks: { 1: crypto.randomBytes(32) }, currentVersion: 1, indexKey: crypto.randomBytes(32),
   });
-  api = createApi({ store: mysqlStore(app), vault, now: () => clock });
+  api = createApi({ store: mysqlStore(app), vault, now: () => clock, appKey: crypto.randomBytes(32), requireMfa: false });
   for (const [username, role] of [['admin', 'admin'], ['revenue', 'revenue'], ['finance', 'finance']]) {
     await admin.query('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)',
       [username, await hashPassword(PW), role]);
@@ -151,3 +152,46 @@ test('session token is stored only as a hash', { skip }, async () => {
   const expected = crypto.createHash('sha256').update(token).digest('hex');
   assert.equal(rows.some((r) => r.token_hash === expected), true);
 });
+
+test('OTP is stored encrypted, survives restarts of the API object, and cannot be replayed', { skip }, async () => {
+  await admin.query("INSERT INTO users (username, password_hash, role) VALUES ('otpuser', ?, 'finance')", [await hashPassword(PW)]);
+  const cookie = await login('otpuser');
+  const setup = await call('/api/mfa/setup', { method: 'POST', cookie, body: {} });
+  assert.equal(setup.status, 200);
+  const [[beforeEnable]] = await admin.query("SELECT totp_secret, totp_enabled FROM users WHERE username = 'otpuser'");
+  assert.equal(beforeEnable.totp_enabled, 0);
+  assert.equal(String(beforeEnable.totp_secret).includes(setup.body.secret), false);
+
+  clock = new Date();
+  const enable = await call('/api/mfa/enable', { method: 'POST', cookie, body: { code: totp.codeAt(setup.body.secret, clock) } });
+  assert.equal(enable.status, 200);
+  const [[afterEnable]] = await admin.query("SELECT totp_enabled, totp_last_step FROM users WHERE username = 'otpuser'");
+  assert.equal(afterEnable.totp_enabled, 1);
+  assert.ok(Number(afterEnable.totp_last_step) > 0);
+
+  // Same code again is refused (step already used); the next window works.
+  const first = await call('/api/login', { method: 'POST', body: { username: 'otpuser', password: PW } });
+  assert.deepEqual(first.body, { mfa_required: true });
+  const pending = /__Host-dk_mfa=[^;]+/.exec(first.headers['Set-Cookie'])[0];
+  const reuse = await callWithCookie('/api/login/otp', pending, { code: totp.codeAt(setup.body.secret, clock) });
+  assert.equal(reuse.status, 401);
+  clock = new Date(clock.getTime() + 30 * 1000);
+  const ok = await callWithCookie('/api/login/otp', pending, { code: totp.codeAt(setup.body.secret, clock) });
+  assert.equal(ok.status, 200);
+});
+
+// POST with an arbitrary Cookie header (the pending-login cookie).
+function callWithCookie(url, cookieHeader, body) {
+  const payload = JSON.stringify(body);
+  const req = Readable.from([Buffer.from(payload)]);
+  req.method = 'POST';
+  req.url = url;
+  req.headers = { 'content-type': 'application/json', 'content-length': String(Buffer.byteLength(payload)), cookie: cookieHeader };
+  return new Promise((resolve, reject) => {
+    const res = {
+      writeHead(status, h) { this.status = status; this.headers = h; },
+      end(text) { resolve({ status: this.status, headers: this.headers || {}, body: JSON.parse(text) }); },
+    };
+    Promise.resolve(api(req, res, url)).catch(reject);
+  });
+}
