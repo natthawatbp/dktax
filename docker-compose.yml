@@ -7,9 +7,26 @@ services:
     container_name: dk-one-tax-bill
     restart: unless-stopped
     init: true
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       PORT: "8080"
       TRUST_PROXY: "1"
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: dktax
+      DB_USER: dktax_app
+      DB_PASSWORD_FILE: /run/secrets/db_app_password
+      NID_KEK_V1_FILE: /run/secrets/nid_kek_v1
+      NID_INDEX_KEY_FILE: /run/secrets/nid_index_key
+    secrets:
+      - db_app_password
+      - nid_kek_v1
+      - nid_index_key
+    networks:
+      - frontend
+      - backend
     # Bound to loopback: expose publicly only through a TLS reverse proxy.
     ports:
       - "127.0.0.1:${HOST_PORT:-8080}:8080"
@@ -27,3 +44,64 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  db:
+    image: postgres:16-alpine
+    container_name: dk-one-tax-bill-db
+    restart: unless-stopped
+    init: true
+    environment:
+      POSTGRES_DB: dktax
+      POSTGRES_USER: dktax_admin
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+      - db_app_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - backend          # internal only: no route to the internet, no published port
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dktax_admin -d dktax"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  frontend: {}
+  backend:
+    internal: true
+
+volumes:
+  pgdata: {}
+
+secrets:
+  db_password:
+    file: ./secrets/db_password
+  db_app_password:
+    file: ./secrets/db_app_password
+  nid_kek_v1:
+    file: ./secrets/nid_kek_v1
+  nid_index_key:
+    file: ./secrets/nid_index_key

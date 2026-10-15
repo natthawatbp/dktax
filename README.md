@@ -79,3 +79,25 @@ Field-level encryption module for เลขประจำตัวประช�
 - Tests: `npm test` (18 tests covering tampering, row swaps, wrong keys, rotation, and plaintext absence).
 
 **Before production:** the check-digit algorithm (mod 11) is the standard published one, but verify it against real records held by the municipality. Do not rely on a sample ID from memory.
+
+## Database (PostgreSQL 16 in compose)
+
+`docker-compose.yml` runs `db` on an internal-only network (no route out, no published port). The `web` service joins that network too.
+
+First-time setup on the host (run as root so the nid keys can be owned by the web user):
+
+```bash
+./scripts/gen-secrets.sh          # creates ./secrets/* (never overwrites)
+# Copy nid_kek_v1 and nid_index_key OFFLINE. Losing nid_kek_v1 makes stored national IDs unrecoverable.
+docker compose up -d --build
+```
+
+- `db/init/` runs only on the first start of an empty volume. Changing the schema later needs a migration, not an edit to these files.
+- The app role `dktax_app` can read and write `taxpayers`, and can only insert into `audit_log`. A trigger blocks updates and deletes on `audit_log`.
+- Secrets are file-based (`/run/secrets/*`), not environment variables, so they do not show in `docker inspect`.
+
+**Not done yet:**
+- The Node server does not connect to the database. The API layer (auth, role checks, audit writes, encryption calls) is the next step.
+- DB traffic is plaintext inside the internal Docker network. Enabling Postgres TLS is a follow-up.
+- `read_only` on the database container and the capability list were written from the official image's documentation but not run. Confirm with `docker compose up` on the VPS before relying on them.
+- `secrets/` lives on the VPS disk. Use a secret manager or KMS when one is available.
