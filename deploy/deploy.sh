@@ -31,7 +31,7 @@ TARGET="$VPS_USER@$VPS_HOST"
 # Ship only what the image needs; never sync secrets, git metadata or design uploads.
 rsync -az --delete -e "$SSH_CMD" \
   --include='Dockerfile' --include='docker-compose.yml' --include='.dockerignore' \
-  --include='package.json' --include='server.js' --include='lib/***' \
+  --include='package.json' --include='package-lock.json' --include='server.js' --include='lib/***' \
   --include='public/' --include='public/***' \
   --include='db/***' --include='scripts/***' \
   --exclude='*' \

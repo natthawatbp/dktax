@@ -2,3 +2,4 @@
 *.env.local
 deploy/.env
 secrets/
+node_modules/

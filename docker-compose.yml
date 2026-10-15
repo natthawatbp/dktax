@@ -88,6 +88,34 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # One-off admin tasks, e.g.:
+  #   docker compose run --rm -T admin-cli scripts/create-admin.js <username> <role>  < password.txt
+  # Runs as the table owner, so it is kept out of the web service entirely.
+  admin-cli:
+    image: dk-one-tax-bill:local
+    profiles: ["tools"]
+    entrypoint: ["node"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: dktax
+      DB_USER: dktax_admin
+      DB_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    networks:
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
 networks:
   frontend: {}
   backend:

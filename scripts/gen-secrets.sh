@@ -13,11 +13,11 @@ for name in db_password db_app_password nid_kek_v1 nid_index_key; do
     continue
   fi
   (umask 077; openssl rand -hex 32 > "$f")
-  # The web container runs as uid 1000 with all capabilities dropped, so it can only read
-  # its own keys when they are owned by that uid. Database secrets are read by root in the
-  # entrypoint and stay root-owned.
+  # The web and admin-cli containers run as uid 1000 with all capabilities dropped, so they can
+  # only read these files when they are owned by that uid. db_app_password is read only by root
+  # in the database init script and stays root-owned.
   case "$name" in
-    nid_*)
+    db_password|nid_*)
       if [[ "$(id -u)" -eq 0 ]]; then
         chown 1000:1000 "$f"
       else

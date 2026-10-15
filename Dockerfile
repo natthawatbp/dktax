@@ -5,7 +5,14 @@ ENV NODE_ENV=production \
     PORT=8080
 
 WORKDIR /app
-COPY --chown=root:root package.json server.js /app/
+
+# Dependencies first, from the lock file only, so the layer is cached and reproducible.
+COPY --chown=root:root package.json package-lock.json /app/
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+
+COPY --chown=root:root server.js /app/
+COPY --chown=root:root lib /app/lib
+COPY --chown=root:root scripts /app/scripts
 COPY --chown=root:root public /app/public
 
 USER node

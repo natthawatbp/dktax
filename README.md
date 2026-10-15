@@ -97,7 +97,52 @@ docker compose up -d --build
 - Secrets are file-based (`/run/secrets/*`), not environment variables, so they do not show in `docker inspect`.
 
 **Not done yet:**
-- The Node server does not connect to the database. The API layer (auth, role checks, audit writes, encryption calls) is the next step.
 - DB traffic is plaintext inside the internal Docker network. Enabling Postgres TLS is a follow-up.
 - `read_only` on the database container and the capability list were written from the official image's documentation but not run. Confirm with `docker compose up` on the VPS before relying on them.
 - `secrets/` lives on the VPS disk. Use a secret manager or KMS when one is available.
+
+## API
+
+Enabled when `DB_HOST` is set. Without it, `/api/*` returns 404 and the static site still works.
+
+| Method & path | Roles | What it does |
+|---|---|---|
+| `POST /api/login` | anyone | Starts a session. Sets `__Host-dk_sid` (HttpOnly, Secure, SameSite=Strict). Locks the account for 15 minutes after 5 failures. |
+| `POST /api/logout` | any session | Deletes the session. |
+| `GET /api/me` | any session | Current user and role. |
+| `POST /api/taxpayers` | admin, revenue | Registers a taxpayer. Body: `{taxpayer_id, national_id}`. Returns only the masked ID. |
+| `POST /api/taxpayers/lookup` | admin, revenue, finance | Finds a taxpayer by national ID through the blind index. Returns the masked ID. |
+| `GET /api/taxpayers/:id` | admin, revenue, finance, health, exec | Returns the masked ID. Decrypts internally and audits the view. |
+| `POST /api/taxpayers/:id/reveal` | admin | Returns the full ID. Requires `{reason}` of 10 to 200 characters. Limited to 10 per hour. Audited. |
+| `GET /api/audit?limit=` | admin | Recent audit rows. |
+
+Rules that apply to every route:
+- Roles are checked on the server. The UI is not trusted.
+- Writes require `Content-Type: application/json`. Together with `SameSite=Strict`, this blocks cross-site form posts.
+- Errors return a short code (`invalid_credentials`, `forbidden`, ...) with no internal detail.
+- National IDs never appear in logs, audit rows or error messages.
+
+### Creating users
+
+Users are created by an admin with the owner credentials, and the password is read from stdin:
+
+```bash
+docker compose build
+printf '%s' "$PASSWORD" | docker compose run --rm -T admin-cli scripts/create-admin.js revenue1 revenue
+```
+
+The web service has no access to the owner credentials.
+
+## Tests
+
+```bash
+npm test                                   # unit tests, no database needed
+TEST_ADMIN_URL=postgres://dktax_admin:...@host/dktax_test \
+TEST_APP_URL=postgres://dktax_app:...@host/dktax_test npm test   # adds real-PostgreSQL tests
+```
+
+The integration tests need a database with `db/init/01-schema.sql` and `02-app.sql` applied. They truncate tables, so use a test database only. They were run locally against PostgreSQL 16.15.
+
+## Dependencies
+
+The only runtime dependency is `pg` (PostgreSQL driver), pinned to 8.13.1 with a lock file. Everything else uses Node.js built-ins.

@@ -1,10 +1,11 @@
 'use strict';
-// Static server for DK One Tax Bill. Node.js built-ins only (no npm dependencies).
+// Server for DK One Tax Bill: static front-end plus the /api routes. Node.js built-ins except the pg driver.
 // Serves ./public read-only. TLS terminates at a reverse proxy in front of this process.
 
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const { SECURITY_HEADERS, HttpError, sendJson } = require('./lib/http');
 
 const PORT = Number(process.env.PORT) || 8080;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -12,29 +13,17 @@ const HOST = process.env.HOST || '0.0.0.0';
 const TRUST_PROXY = process.env.TRUST_PROXY === '1';
 const ROOT = path.resolve(__dirname, 'public');
 
-const CSP = [
-  "default-src 'none'",
-  "script-src 'self' 'unsafe-inline' blob: https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
-  "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com",
-  "font-src 'self' blob: https://cdnjs.cloudflare.com https://fonts.gstatic.com data:",
-  "img-src 'self' data: blob: https://cdn.imagetourls.com",
-  "connect-src 'self' blob:",
-  "form-action 'self'",
-  "base-uri 'self'",
-  "object-src 'none'",
-  "frame-ancestors 'none'",
-].join('; ');
-
-const SECURITY_HEADERS = {
-  'Content-Security-Policy': CSP,
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'Referrer-Policy': 'no-referrer',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()',
-  'Cross-Origin-Opener-Policy': 'same-origin',
-  'Cross-Origin-Resource-Policy': 'same-origin',
-  'X-Robots-Tag': 'noindex, nofollow, noarchive',
-};
+// The API is enabled only when a database is configured, so the static site still runs without one.
+let api = null;
+if (process.env.DB_HOST) {
+  const { Pool } = require('pg');
+  const { loadVault, loadPoolConfig } = require('./lib/config');
+  const { pgStore } = require('./lib/store');
+  const { createApi } = require('./lib/api');
+  const pool = new Pool(loadPoolConfig());
+  pool.on('error', (err) => console.error('database pool error:', err.code || 'unknown'));
+  api = createApi({ store: pgStore(pool), vault: loadVault() });
+}
 
 // Whitelist: anything not listed here (including .md, .jsx, .json, .sh) is never served.
 const MIME = {
@@ -93,7 +82,7 @@ function resolveFile(pathname) {
   return file;
 }
 
-function send(res, status, body, extra = {}) {
+function sendText(res, status, body, extra = {}) {
   res.writeHead(status, {
     ...SECURITY_HEADERS,
     'Content-Type': 'text/plain; charset=utf-8',
@@ -103,26 +92,40 @@ function send(res, status, body, extra = {}) {
   res.end(body);
 }
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   if (rateLimited(clientIp(req))) {
-    return send(res, 429, 'Too Many Requests', { 'Retry-After': '1' });
-  }
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    return send(res, 405, 'Method Not Allowed', { Allow: 'GET, HEAD' });
+    return sendText(res, 429, 'Too Many Requests', { 'Retry-After': '1' });
   }
 
   let pathname;
   try {
     pathname = new URL(req.url, 'http://localhost').pathname;
   } catch {
-    return send(res, 400, 'Bad Request');
+    return sendText(res, 400, 'Bad Request');
+  }
+
+  if (pathname === '/api' || pathname.startsWith('/api/')) {
+    if (!api) return sendJson(res, 404, { error: 'not_found' });
+    try {
+      const handled = await api(req, res, pathname);
+      if (!handled) sendJson(res, 404, { error: 'not_found' });
+    } catch (err) {
+      if (err instanceof HttpError) return sendJson(res, err.status, { error: err.code });
+      console.error('api error:', err.code || err.name);
+      sendJson(res, 500, { error: 'internal' });
+    }
+    return;
+  }
+
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return sendText(res, 405, 'Method Not Allowed', { Allow: 'GET, HEAD' });
   }
 
   const file = resolveFile(pathname);
-  if (!file) return send(res, 404, 'Not Found');
+  if (!file) return sendText(res, 404, 'Not Found');
 
   fs.stat(file, (statErr, stat) => {
-    if (statErr || !stat.isFile()) return send(res, 404, 'Not Found');
+    if (statErr || !stat.isFile()) return sendText(res, 404, 'Not Found');
 
     const ext = path.extname(file).toLowerCase();
     res.writeHead(200, {
@@ -144,7 +147,7 @@ server.headersTimeout = 10000;
 server.keepAliveTimeout = 5000;
 
 server.listen(PORT, HOST, () => {
-  console.log(`dk-one-tax-bill listening on ${HOST}:${PORT}`);
+  console.log(`dk-one-tax-bill listening on ${HOST}:${PORT}${api ? ' (api enabled)' : ''}`);
 });
 
 function shutdown() {

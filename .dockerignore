@@ -1,5 +1,8 @@
-# Allowlist: only the server and the runtime bundle go into the image.
+# Allowlist: only the server, its libraries, scripts and the runtime bundle go into the image.
 *
 !package.json
+!package-lock.json
 !server.js
+!lib
+!scripts
 !public
