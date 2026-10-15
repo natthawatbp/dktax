@@ -1,0 +1,14 @@
+:root{
+--space-1:4px;--space-2:5px;--space-3:10px;--space-4:12px;--space-5:15px;--space-6:20px;--space-7:25px;--space-8:40px;
+--sidebar-width:300px;
+--sidebar-collapsed-width:96px;
+--sidebar-item-pad:15px 25px;
+--navbar-pad:15px 25px;
+--content-pad:25px;
+--content-pad-mobile:15px;
+--card-pad:20px;
+--login-card-pad:40px;
+--login-card-max:450px;
+--avatar-size:40px;
+--bp-mobile:768px; /* @kind other */
+}

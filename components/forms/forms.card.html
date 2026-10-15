@@ -1,0 +1,15 @@
+<!-- @dsCard group="Components" viewport="700x300" name="Forms" subtitle="Button, IconButton, Input, Select, Checkbox" -->
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{padding:20px;background:#f4f6f9}.lbl{font-size:12px;color:#6c757d;margin-bottom:6px}</style></head><body><div id="root"></div>
+<script type="text/babel">const NS=window.DKOneTaxBillDesignSystem_3069af;
+const {Button,IconButton,Input,Select,Checkbox}=NS;
+function App(){return <div className="d-flex flex-column" style={{gap:16}}>
+<div className="d-flex flex-wrap" style={{gap:8}}><Button icon="fas fa-sign-in-alt">เข้าสู่ระบบ</Button><Button variant="outline" icon="fas fa-sync-alt">รีเฟรช</Button><Button variant="success" icon="fas fa-file-excel">ส่งออก Excel</Button><Button variant="line" icon="fab fa-line">LINE OA</Button><Button variant="danger" icon="fas fa-trash">ลบ</Button><Button loading>กำลังบันทึก...</Button></div>
+<div className="d-flex align-items-center" style={{gap:8}}><IconButton icon="fas fa-eye" title="ดู"/><IconButton icon="fas fa-pen" tone="warning" title="แก้ไข"/><IconButton icon="fas fa-trash" tone="danger" title="ลบ"/><IconButton icon="fab fa-line" tone="line" title="แจ้ง LINE"/><IconButton icon="fab fa-line" tone="line" active title="แจ้งแล้ว"/><span className="ms-3"></span><Checkbox defaultChecked label="เลือกรายการ"/></div>
+<div className="row g-3"><div className="col-4"><Input label="Username" placeholder="กรอกข้อมูล"/></div><div className="col-4"><Input label="รหัสผ่าน" type="password" defaultValue="admin1234"/></div><div className="col-4"><Select label="ปีงบประมาณ" options={['2569','2568','2567']}/></div></div>
+</div>}
+ReactDOM.createRoot(root).render(<App/>);</script></body></html>

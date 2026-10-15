@@ -1,0 +1,17 @@
+:root{
+--radius-sm:6px;
+--radius-md:8px;
+--radius-card:12px;
+--radius-login:16px;
+--radius-pill:20px;
+--radius-round:50%;
+--shadow-card:0 2px 10px rgba(0,0,0,0.03);
+--shadow-navbar:0 2px 4px rgba(0,0,0,0.05);
+--shadow-login:0 10px 30px rgba(0,0,0,0.2);
+--shadow-modal:0 16px 40px rgba(12,37,71,0.25);
+--overlay:rgba(0,0,0,0.5);
+--border-active-w:4px; /* @kind spacing */
+--ease:ease; /* @kind other */
+--dur-fast:0.2s; /* @kind other */
+--dur-base:0.3s; /* @kind other */
+}

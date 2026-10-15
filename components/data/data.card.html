@@ -1,0 +1,15 @@
+<!-- @dsCard group="Components" viewport="700x400" name="Data display" subtitle="Card, StatCard, StatusBadge, StatusFilter, DataTable" -->
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{padding:20px;background:#f4f6f9}.lbl{font-size:12px;color:#6c757d;margin-bottom:6px}</style></head><body><div id="root"></div>
+<script type="text/babel">const NS=window.DKOneTaxBillDesignSystem_3069af;
+const {Card,StatCard,StatusBadge,StatusFilter,DataTable,IconButton}=NS;
+function App(){const [f,setF]=React.useState('all');return <div className="d-flex flex-column" style={{gap:14}}>
+<div className="row g-3"><div className="col-4"><StatCard label="ยอดจัดเก็บแล้ว" value="4.12M" unit="บาท" progress={68} sub="68% จากยอดเรียกเก็บ" icon="fas fa-coins"/></div><div className="col-4"><StatCard label="ภาษีป้าย" value="214" icon="fas fa-sign" tone="info" selected onClick={()=>{}}/></div><div className="col-4"><StatCard label="เกินกำหนด" value="37" icon="fas fa-exclamation-circle" tone="danger"/></div></div>
+<StatusFilter value={f} onChange={setF} counts={{all:412,paid:250,unpaid:88,expiring:21,overdue:37,review:12,other:4}}/>
+<Card padding="8px 12px"><DataTable columns={[{key:'n',title:'ชื่อผู้เสียภาษี'},{key:'i',title:'รายการ'},{key:'a',title:'ยอดรวม',align:'end'},{key:'s',title:'สถานะ',render:r=><StatusBadge status={r.s}/>},{key:'x',title:'',align:'end',render:()=> <IconButton icon="fas fa-eye" title="ดู" size={30}/>}]} rows={[{id:1,n:'บริษัท ดอนแก้วค้าวัสดุ จำกัด',i:'ภาษีป้าย',a:'3,600.00',s:'paid'},{id:2,n:'นางสาวมณี ศรีสุข',i:'ภาษีที่ดิน',a:'1,250.00',s:'overdue'}]}/></Card>
+</div>}
+ReactDOM.createRoot(root).render(<App/>);</script></body></html>

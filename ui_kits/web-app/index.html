@@ -1,0 +1,110 @@
+<!-- @dsCard group="UI Kit" viewport="1280x800" name="DK One Tax Bill — Web app" subtitle="Login → role-based app (citizen / staff / finance / admin)" -->
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DK One Tax Bill - เทศบาลเมืองดอนแก้ว</title>
+<link rel="stylesheet" href="../../styles.css">
+<style>html,body,#root{height:100%}body{margin:0}</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script>var DSNS = window.DKOneTaxBillDesignSystem_3069af || {}; if (!window.DKOneTaxBillDesignSystem_3069af) document.addEventListener('DOMContentLoaded', function () { document.getElementById('root').innerHTML = '<p style="padding:24px;font-family:sans-serif">ไม่พบไฟล์ _ds_bundle.js — design system bundle not compiled yet.</p>'; }); var Logo = DSNS.Logo, Button = DSNS.Button, IconButton = DSNS.IconButton, Input = DSNS.Input, Select = DSNS.Select, Checkbox = DSNS.Checkbox, Card = DSNS.Card, StatCard = DSNS.StatCard, StatusBadge = DSNS.StatusBadge, StatusFilter = DSNS.StatusFilter, DataTable = DSNS.DataTable, AppModal = DSNS.AppModal, Sidebar = DSNS.Sidebar, TopNavbar = DSNS.TopNavbar;</script>
+<script src="data.js"></script>
+<script src="promptpay.js"></script>
+<script src="notice.js"></script>
+<script src="elaas.js"></script>
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#153e75"/><text x="50" y="62" font-family="Prompt,sans-serif" font-size="30" font-weight="700" fill="#fff" text-anchor="middle">DK</text></svg></template>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="Login.jsx"></script>
+<script type="text/babel" src="Dashboard.jsx"></script>
+<script type="text/babel" src="LinePreview.jsx"></script>
+<script type="text/babel" src="Registry.jsx"></script>
+<script type="text/babel" src="Citizen.jsx"></script>
+<script type="text/babel" src="Staff.jsx"></script>
+<script type="text/babel" src="Settings.jsx"></script>
+<script type="text/babel">
+const STAFF = ['revenue', 'finance', 'health', 'admin'];
+const MENU = [
+  { key: 'dashboard', label: 'ภาพรวม', icon: 'fas fa-chart-pie', title: 'ภาพรวมการจัดเก็บรายได้', roles: [...STAFF, 'exec'] },
+  { key: 'registry', label: 'ทะเบียนผู้เสียภาษี', icon: 'fas fa-users', title: 'ทะเบียนผู้เสียภาษี', roles: STAFF },
+  { key: 'bills', label: 'รายการของฉัน', icon: 'fas fa-file-invoice-dollar', title: 'รายการของฉัน', roles: ['citizen'] },
+  { key: 'history', label: 'ประวัติการชำระ', icon: 'fas fa-history', title: 'ประวัติการชำระ', roles: ['citizen'] },
+  { key: 'notifs', label: 'แจ้งเตือน', icon: 'fas fa-bell', title: 'รายการแจ้งเตือน', roles: STAFF, badge: 2 },
+  { key: 'txns', label: 'ธุรกรรม', icon: 'fas fa-exchange-alt', title: 'ธุรกรรม', roles: STAFF, badge: 2 },
+  { key: 'registrants', label: 'ผู้ลงทะเบียน', icon: 'fas fa-user-check', title: 'ผู้ลงทะเบียน', roles: ['admin'] },
+  { key: 'settings', label: 'ตั้งค่าระบบ', icon: 'fas fa-cog', title: 'ตั้งค่าระบบ', roles: ['admin'] },
+  { key: 'logout', label: 'ออกจากระบบ', icon: 'fas fa-sign-out-alt', tone: 'danger', divider: true, roles: [...STAFF, 'exec', 'citizen'] }
+];
+
+function useMobile() {
+  const [m, setM] = React.useState(window.innerWidth <= 768);
+  React.useEffect(() => { const h = () => setM(window.innerWidth <= 768); window.addEventListener('resize', h); return () => window.removeEventListener('resize', h); }, []);
+  return m;
+}
+
+function App() {
+  const [accounts, setAccounts] = React.useState(DK.ACCOUNTS);
+  const [user, setUser] = React.useState(() => { try { return JSON.parse(localStorage.getItem('dk_user')); } catch (e) { return null; } });
+  const [page, setPage] = React.useState(localStorage.getItem('dk_page') || 'dashboard');
+  const [year, setYear] = React.useState(DK.CUR_YEAR);
+  const [collapsed, setCollapsed] = React.useState(false);
+  const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [welcome, setWelcome] = React.useState(false);
+  const [confirmOut, setConfirmOut] = React.useState(false);
+  const isMobile = useMobile();
+  React.useEffect(() => { localStorage.setItem('dk_page', page); }, [page]);
+  React.useEffect(() => {
+    const h = e => {
+      const d = e.data; if (!d || d.type !== 'dk-go') return;
+      setWelcome(false); setConfirmOut(false); setMobileOpen(false);
+      if (!d.role) { setUser(null); localStorage.removeItem('dk_user'); return; }
+      const acc = accounts.find(a => a.role === d.role); if (!acc) return;
+      setUser(acc); localStorage.setItem('dk_user', JSON.stringify(acc)); setPage(d.page);
+    };
+    window.addEventListener('message', h); return () => window.removeEventListener('message', h);
+  }, [accounts]);
+
+  const login = acc => {
+    setUser(acc); localStorage.setItem('dk_user', JSON.stringify(acc));
+    setPage(acc.role === 'citizen' ? 'bills' : 'dashboard'); setWelcome(true);
+  };
+  const logout = () => { setConfirmOut(false); setUser(null); localStorage.removeItem('dk_user'); };
+
+  if (!user) return <Login onLogin={login} accounts={accounts} setAccounts={setAccounts} />;
+
+  const items = MENU.filter(m => m.roles.includes(user.role));
+  const cur = items.find(m => m.key === page) || items[0];
+  const select = k => { if (k === 'logout') return setConfirmOut(true); setPage(k); setMobileOpen(false); };
+  const props = { year, setYear, user, role: user.role, go: setPage };
+  const screens = { dashboard: Dashboard, registry: Registry, bills: MyBills, history: History, notifs: Notifications, txns: Transactions, registrants: Registrants, settings: Settings };
+  const Screen = screens[cur.key];
+  const fields = [{ label: 'Username', value: user.username }, { label: 'บทบาท', value: DK.ROLES[user.role] }, { label: 'เบอร์โทร', value: user.phone }, { label: 'สถานะ', value: <span className="text-success"><i className="fas fa-circle me-1" style={{ fontSize: 8 }}></i>ออนไลน์</span> }];
+
+  return (
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+      <Sidebar items={items} active={cur.key} onSelect={select} collapsed={collapsed} isMobile={isMobile} mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
+      <main style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100vh', overflowY: 'auto', background: 'var(--surface-page)' }}>
+        <TopNavbar title={cur.title} onToggle={() => isMobile ? setMobileOpen(!mobileOpen) : setCollapsed(!collapsed)} user={{ name: user.name, role: DK.ROLES[user.role], fields }} onLogout={() => setConfirmOut(true)} />
+        <div style={{ padding: isMobile ? 'var(--content-pad-mobile)' : 'var(--content-pad)' }}>
+          <Screen key={cur.key} {...props} />
+        </div>
+      </main>
+      <AppModal open={welcome} onClose={() => setWelcome(false)} tone="success" icon="fas fa-check-circle" title="เข้าสู่ระบบสำเร็จ" centeredBody>
+        <i className="fas fa-user-check mb-3" style={{ fontSize: 44, color: 'var(--status-paid)' }}></i>
+        <h5 className="mb-1">ยินดีต้อนรับ คุณ{user.name}</h5><div className="text-muted">{DK.ROLES[user.role]}</div>
+      </AppModal>
+      <AppModal open={confirmOut} onClose={() => setConfirmOut(false)} tone="danger" icon="fas fa-sign-out-alt" title="ออกจากระบบ" centeredBody
+        footer={<><Button variant="secondary" onClick={() => setConfirmOut(false)}>ยกเลิก</Button><Button variant="danger" icon="fas fa-sign-out-alt" onClick={logout}>ออกจากระบบ</Button></>}>
+        <h5 className="mb-0">ต้องการออกจากระบบใช่หรือไม่?</h5>
+      </AppModal>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

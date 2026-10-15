@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockup — DK One Tax Bill</title>
+<link rel="stylesheet" href="../../styles.css">
+<style>
+html,body{margin:0;height:100%}body{background:#eef1f5;font-family:var(--font-sans);color:var(--text-body);display:flex;flex-direction:column}
+a{color:var(--primary)}a:hover{color:var(--blue-700,#153e75)}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;padding:14px 28px;background:#fff;border-bottom:1px solid #dde3ec}
+.bar .brand{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--primary);margin-right:8px}
+.bar .brand img{height:30px}
+.grp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.grp b{font-size:12px;font-weight:600;color:#6b7686;margin-right:2px}
+.chip{border:1px solid #cfd8e6;background:#fff;color:var(--text-body);border-radius:999px;padding:5px 13px;font:500 13px var(--font-sans);cursor:pointer;white-space:nowrap;transition:.15s}
+.chip:hover{border-color:var(--primary);color:var(--primary)}
+.chip.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;gap:48px;padding:28px}
+.desk{display:flex;flex-direction:column;align-items:center}
+.screenwrap{position:relative;overflow:hidden}
+.monitor{background:#1b2230;border-radius:16px;padding:14px;box-shadow:0 30px 60px rgba(20,35,60,.22)}
+.monitor .screenwrap{border-radius:4px;background:#fff}
+.neck{width:16%;height:46px;background:linear-gradient(#c9cfd8,#aeb6c2)}
+.foot{width:34%;height:10px;border-radius:10px 10px 4px 4px;background:#b9c0cb}
+.phone{background:#111722;border-radius:52px;padding:13px;box-shadow:0 30px 60px rgba(20,35,60,.25);position:relative}
+.phone .screenwrap{border-radius:0 0 40px 40px;background:#fff}
+.phone .status{height:40px;border-radius:40px 40px 0 0;background:#fff}
+.phone .notch{position:absolute;top:19px;left:50%;transform:translateX(-50%);width:100px;height:26px;border-radius:20px;background:#111722;z-index:2}
+iframe{border:0;transform-origin:0 0;position:absolute;top:0;left:0;background:#fff}
+.lbl{margin-top:14px;font-size:13px;color:#6b7686}
+</style></head>
+<body>
+<div class="bar">
+<div class="brand"><img src="../../assets/logo-long.png" alt="">DK One Tax Bill</div>
+<div class="grp"><b>เริ่มต้น</b><button class="chip" data-role="" data-page="">Login</button></div>
+<div class="grp"><b>ประชาชน</b><button class="chip" data-role="citizen" data-page="bills">รายการของฉัน</button><button class="chip" data-role="citizen" data-page="history">ประวัติการชำระ</button></div>
+<div class="grp"><b>เจ้าหน้าที่</b><button class="chip" data-role="revenue" data-page="dashboard">ภาพรวม</button><button class="chip" data-role="revenue" data-page="registry">ทะเบียนผู้เสียภาษี</button><button class="chip" data-role="revenue" data-page="notifs">แจ้งเตือน</button><button class="chip" data-role="finance" data-page="txns">ธุรกรรม (การเงิน)</button></div>
+<div class="grp"><b>Admin</b><button class="chip" data-role="admin" data-page="registrants">ผู้ลงทะเบียน</button><button class="chip" data-role="admin" data-page="settings">ตั้งค่าระบบ</button></div>
+</div>
+<div class="stage" id="stage">
+<div class="desk"><div class="monitor"><div class="screenwrap" id="dw"><iframe id="df" src="index.html" width="1440" height="900" title="Desktop"></iframe></div></div><div class="neck"></div><div class="foot"></div></div>
+<div class="desk"><div class="phone"><div class="notch"></div><div class="status"></div><div class="screenwrap" id="mw"><iframe id="mf" src="index.html" width="390" height="844" title="Mobile"></iframe></div></div><div class="lbl">มือถือ 390 × 844</div></div>
+</div>
+<script>
+var DW=1440,DH=900,MW=390,MH=844;
+function fit(){
+  var s=document.getElementById('stage'),aw=s.clientWidth-56-48,ah=s.clientHeight-56;
+  var km=Math.min((ah-26-30-40)/MH,1);
+  var kd=Math.min((aw-(MW*km+26))/(DW+28),(ah-28-56)/DH,1);
+  set('dw','df',DW,DH,kd);set('mw','mf',MW,MH,km);
+}
+function set(w,f,W,H,k){var e=document.getElementById(w);e.style.width=W*k+'px';e.style.height=H*k+'px';document.getElementById(f).style.transform='scale('+k+')';}
+window.addEventListener('resize',fit);fit();
+document.querySelectorAll('.chip').forEach(function(b){b.onclick=function(){
+  document.querySelectorAll('.chip').forEach(function(c){c.classList.toggle('on',c===b)});
+  var m={type:'dk-go',role:b.dataset.role||null,page:b.dataset.page};
+  ['df','mf'].forEach(function(id){document.getElementById(id).contentWindow.postMessage(m,'*')});
+}});
+</script>
+</body></html>

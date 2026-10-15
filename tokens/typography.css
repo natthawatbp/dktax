@@ -1,0 +1,20 @@
+:root{
+--font-sans:'Prompt',sans-serif;
+--fw-light:300; /* @kind font */
+--fw-regular:400; /* @kind font */
+--fw-medium:500; /* @kind font */
+--fw-semibold:600; /* @kind font */
+--fw-bold:700; /* @kind font */
+/* Sizes follow Bootstrap rem scale used in source */
+--fs-xs:0.8rem;     /* footer credit */
+--fs-sm:0.85rem;    /* badges, meta */
+--fs-label:0.95rem; /* summary-label */
+--fs-body:1rem;
+--fs-menu:1rem;
+--fs-h5:1.25rem;    /* page title, card titles */
+--fs-h4:1.5rem;     /* section headings */
+--fs-stat:2.2rem;   /* summary-value */
+--lh-tight:1.2; /* @kind font */
+--lh-body:1.5; /* @kind font */
+--text-heading:var(--fw-bold); /* @kind font */
+}

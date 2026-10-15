@@ -1,0 +1,61 @@
+:root{
+/* Guardian Blue scale — anchored on source --primary-blue #153e75 / --secondary-blue #1a5299 / gradient end #2a6fb3 */
+--blue-950:#0c2547;
+--blue-900:#153e75;
+--blue-800:#1a5299;
+--blue-700:#2a6fb3;
+--blue-500:#4a8fd6;
+--blue-200:#c9dcf3;
+--blue-100:#e6effa;
+--blue-50:#f1f6fc;
+
+/* Neutrals (source: --bg-light #f4f6f9, --text-dark #263238, borders #e0e0e0 / #f0f0f0, menu text #555, muted #6c757d) */
+--white:#ffffff;
+--gray-50:#f4f6f9;
+--gray-100:#f0f0f0;
+--gray-200:#e0e0e0;
+--gray-400:#adb5bd;
+--gray-500:#6c757d;
+--gray-600:#555555;
+--gray-900:#263238;
+
+/* Status palette — 7 filter states */
+--status-paid-bg:#d4edda;--status-paid-fg:#155724;--status-paid:#198754;
+--status-unpaid-bg:#fff3cd;--status-unpaid-fg:#856404;--status-unpaid:#ffc107;
+--status-expiring-bg:#ffe5d0;--status-expiring-fg:#8a3d00;--status-expiring:#fd7e14;
+--status-overdue-bg:#f8d7da;--status-overdue-fg:#842029;--status-overdue:#dc3545;
+--status-review-bg:#cfe2ff;--status-review-fg:#084298;--status-review:#0d6efd;
+--status-other-bg:#e2e3e5;--status-other-fg:#41464b;--status-other:#6c757d;
+
+/* LINE OA brand green (notify buttons) */
+--line-green:#06c755;
+
+/* Semantic aliases */
+--primary:var(--blue-900);
+--primary-hover:var(--blue-800);
+--primary-soft:var(--blue-100);
+--surface-page:#ffffff;
+--surface-card:var(--white);
+--surface-sidebar:var(--white);
+--surface-sidebar-header:var(--blue-900);
+--text-body:var(--gray-900);
+--text-muted:var(--gray-500);
+--text-menu:var(--gray-600);
+--text-on-primary:var(--white);
+--border-default:var(--gray-200);
+--border-card:var(--gray-100);
+--danger:#dc3545;
+--success:#198754;
+--warning:#ffc107;
+--info:#0dcaf0;
+--gradient-login:linear-gradient(135deg,var(--blue-900) 0%,var(--blue-700) 100%);
+
+/* Bootstrap overrides so .btn-primary, .text-primary, focus rings follow Guardian Blue */
+--bs-primary:#153e75;
+--bs-primary-rgb:21,62,117; /* @kind color */
+--bs-body-font-family:'Prompt',sans-serif;
+--bs-body-color:#263238;
+--bs-body-bg:#f4f6f9;
+--bs-link-color:#153e75;
+--bs-link-hover-color:#1a5299;
+}
