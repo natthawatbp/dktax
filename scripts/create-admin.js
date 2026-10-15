@@ -3,7 +3,7 @@
 // Creates a user. The password is read from stdin, never from arguments or environment,
 // so it does not appear in shell history or `ps`.
 // Usage: node scripts/create-admin.js <username> <role>   (run with DB_USER=dktax_admin)
-const { Pool } = require('pg');
+const mysql = require('mysql2/promise');
 const { loadPoolConfig } = require('../lib/config');
 const { hashPassword } = require('../lib/passwords');
 
@@ -26,9 +26,9 @@ async function main() {
   const password = await readStdin();
   const passwordHash = await hashPassword(password);
 
-  const pool = new Pool(loadPoolConfig());
+  const pool = mysql.createPool({ ...loadPoolConfig(), connectionLimit: 1 });
   try {
-    await pool.query('INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)', [username, passwordHash, role]);
+    await pool.query('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)', [username, passwordHash, role]);
     console.log(`created user ${username} (${role})`);
   } finally {
     await pool.end();
@@ -36,6 +36,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err.code === '23505' ? 'user already exists' : `failed: ${err.message}`);
+  console.error(err.code === 'ER_DUP_ENTRY' ? 'user already exists' : `failed: ${err.message}`);
   process.exit(1);
 });

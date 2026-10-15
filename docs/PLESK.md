@@ -4,7 +4,7 @@ Plesk runs `server.js` as a Node.js application behind its own nginx, which term
 
 ## 1. Prerequisites in Plesk
 - Node.js extension installed, version **22** selected for the domain.
-- PostgreSQL 16 available (Plesk database server, or `apt install postgresql-16` on the server).
+- MariaDB 10.5 or newer, which is what Plesk provides for the domain's Databases section.
 - Let's Encrypt enabled for the domain (Plesk: SSL/TLS Certificates).
 
 ## 2. Upload the app
@@ -26,11 +26,11 @@ Click **NPM install**. It installs the exact versions from `package-lock.json`.
 | `NODE_ENV` | `production` |
 | `TRUST_PROXY` | `1` (Plesk's nginx sets `X-Forwarded-For`) |
 | `DB_HOST` | `localhost` |
-| `DB_PORT` | `5432` |
-| `DB_NAME` | `dktax` |
+| `DB_PORT` | `3306` |
+| `DB_NAME` | `donkaew_dktax` |
 | `DB_USER` | `dktax_app` |
 | `DB_PASSWORD` | the `dktax_app` password |
-| `DB_SSL` | `require` only if the database is remote and has TLS |
+| `DB_SSL` | `require` only if the database is remote and has TLS. Leave it unset for localhost |
 | `NID_KEK_V1` | 64 hex chars, see step 5 |
 | `NID_INDEX_KEY` | 64 hex chars, see step 5 |
 
@@ -45,23 +45,24 @@ openssl rand -hex 32   # NID_INDEX_KEY
 ```
 Copy both values to offline storage before setting them in Plesk. Losing `NID_KEK_V1` makes every stored national ID unrecoverable. Losing `NID_INDEX_KEY` breaks lookups. Never change either value on a database that already holds data.
 
-## 6. Database (run once, as the database owner)
-Create the database `dktax` in Plesk, then in a `psql` session connected to it:
-```sql
-CREATE ROLE dktax_app LOGIN PASSWORD '<same as DB_PASSWORD>' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
-```
-Then apply the schema from the app folder, in order:
-```bash
-psql "postgres://<owner>@localhost/dktax" -v ON_ERROR_STOP=1 -f db/init/01-schema.sql
-psql "postgres://<owner>@localhost/dktax" -v ON_ERROR_STOP=1 -f db/init/02-app.sql
-```
-Do not run `db/init/00-roles.sh` on Plesk. It reads Docker secrets. The `CREATE ROLE` above replaces it.
+## 6. Database (MariaDB)
+1. Plesk → **Databases** → **Add Database**. Name: `donkaew_dktax` (do **not** reuse `donkaew_envhealth`, which belongs to another system). Database server: MariaDB.
+2. Plesk creates a database user with the same prefix. Note its name and set its password to the `DB_PASSWORD` value. Put the **same** user name in `DB_USER`.
+3. Open **phpMyAdmin** for that database (Plesk → Databases → Open in phpMyAdmin) and run the schema from the app folder. Copy the file contents into the SQL tab, or upload it with Import:
+   - `db/init/01-schema.sql` (tables and triggers)
+4. Create the least-privilege app account, then run the grants. Use the database owner account from step 2 only for this step, not for the app:
+   ```sql
+   CREATE USER 'dktax_app'@'localhost' IDENTIFIED BY '<DB_PASSWORD>';
+   ```
+   Then run `db/init/02-grants.sql` after replacing `'%'` with `'localhost'` and `dktax.` with `donkaew_dktax.` (Plesk's database name). Use the same `DB_USER` value as above for the app account. If Plesk's owner account cannot run `CREATE USER`, ask the hosting provider to create it.
+
+Note: `DB_USER` must be `dktax_app` if you create it with the SQL above. If Plesk created the app user instead, use that name in `DB_USER` and change the grants to match.
 
 ## 7. First admin
 Enter the owner password without it appearing in shell history:
 ```bash
 cd /var/www/vhosts/<domain>/dk-one-tax-bill
-read -rs OWNER_PW && printf '%s' "$OWNER_PW" | DB_HOST=localhost DB_NAME=dktax DB_USER=<owner> DB_PASSWORD="$OWNER_PW" node scripts/create-admin.js admin admin
+read -rs OWNER_PW && printf '%s' "$OWNER_PW" | DB_HOST=localhost DB_NAME=donkaew_dktax DB_USER=<owner> DB_PASSWORD="$OWNER_PW" node scripts/create-admin.js admin admin
 unset OWNER_PW
 ```
 Use a password of at least 12 characters.
@@ -74,10 +75,10 @@ Plesk → Node.js → **Restart App**. Then:
 
 ## 9. Security checklist
 - Plesk: enable HSTS for the domain (SSL/TLS settings).
-- Keep PostgreSQL bound to localhost. Do not open port 5432 in the firewall.
+- Keep MariaDB bound to localhost. Do not open port 3306 in the firewall.
 - Store the two keys offline before the first real data is entered.
 - Keep the Plesk admin account separate from day-to-day staff accounts.
 
 ## Not yet done
 - The front-end still uses the old mock login and does not call `/api`. Until it does, the public login screen cannot be used.
-- Database connections are plaintext on localhost. That is acceptable only while Postgres is on the same host.
+- Database connections are plaintext on localhost. That is acceptable only while MariaDB is on the same host.

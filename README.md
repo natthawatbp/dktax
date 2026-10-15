@@ -80,9 +80,9 @@ Field-level encryption module for เลขประจำตัวประช�
 
 **Before production:** the check-digit algorithm (mod 11) is the standard published one, but verify it against real records held by the municipality. Do not rely on a sample ID from memory.
 
-## Database (PostgreSQL 16 in compose)
+## Database (MariaDB 11 in compose)
 
-`docker-compose.yml` runs `db` on an internal-only network (no route out, no published port). The `web` service joins that network too.
+`docker-compose.yml` runs `db` (MariaDB) on an internal-only network (no route out, no published port). The `web` service joins that network too.
 
 First-time setup on the host (run as root so the nid keys can be owned by the web user):
 
@@ -97,7 +97,7 @@ docker compose up -d --build
 - Secrets are file-based (`/run/secrets/*`), not environment variables, so they do not show in `docker inspect`.
 
 **Not done yet:**
-- DB traffic is plaintext inside the internal Docker network. Enabling Postgres TLS is a follow-up.
+- DB traffic is plaintext inside the internal Docker network. Enabling MariaDB TLS is a follow-up.
 - `read_only` on the database container and the capability list were written from the official image's documentation but not run. Confirm with `docker compose up` on the VPS before relying on them.
 - `secrets/` lives on the VPS disk. Use a secret manager or KMS when one is available.
 
@@ -137,12 +137,12 @@ The web service has no access to the owner credentials.
 
 ```bash
 npm test                                   # unit tests, no database needed
-TEST_ADMIN_URL=postgres://dktax_admin:...@host/dktax_test \
-TEST_APP_URL=postgres://dktax_app:...@host/dktax_test npm test   # adds real-PostgreSQL tests
+TEST_ADMIN_URL=mysql://dktax_admin:...@127.0.0.1/dktax_test \
+TEST_APP_URL=mysql://dktax_app:...@127.0.0.1/dktax_test npm test   # adds real-MariaDB tests
 ```
 
-The integration tests need a database with `db/init/01-schema.sql` and `02-app.sql` applied. They truncate tables, so use a test database only. They were run locally against PostgreSQL 16.15.
+The integration tests need a database with `db/init/01-schema.sql` and `02-grants.sql` applied. They truncate tables, so use a test database only. They were run locally against MariaDB 10.11.
 
 ## Dependencies
 
-The only runtime dependency is `pg` (PostgreSQL driver), pinned to 8.13.1 with a lock file. Everything else uses Node.js built-ins.
+The only runtime dependency is `mysql2` (MariaDB/MySQL driver), pinned to 3.11.5 with a lock file. Everything else uses Node.js built-ins.

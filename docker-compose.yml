@@ -14,7 +14,7 @@ services:
       PORT: "8080"
       TRUST_PROXY: "1"
       DB_HOST: db
-      DB_PORT: "5432"
+      DB_PORT: "3306"
       DB_NAME: dktax
       DB_USER: dktax_app
       DB_PASSWORD_FILE: /run/secrets/db_app_password
@@ -46,31 +46,29 @@ services:
         max-file: "3"
 
   db:
-    image: postgres:16-alpine
+    image: mariadb:11.4
     container_name: dk-one-tax-bill-db
     restart: unless-stopped
     init: true
     environment:
-      POSTGRES_DB: dktax
-      POSTGRES_USER: dktax_admin
-      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      MARIADB_DATABASE: dktax
+      MARIADB_USER: dktax_admin
+      MARIADB_PASSWORD_FILE: /run/secrets/db_password
+      MARIADB_ROOT_PASSWORD_FILE: /run/secrets/db_root_password
     secrets:
       - db_password
-      - db_app_password
+      - db_root_password
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - dbdata:/var/lib/mysql
+      # Schema and grants run once, on the first start of an empty volume.
       - ./db/init:/docker-entrypoint-initdb.d:ro
     networks:
       - backend          # internal only: no route to the internet, no published port
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dktax_admin -d dktax"]
+      test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
       interval: 10s
-      timeout: 3s
+      timeout: 5s
       retries: 5
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /var/run/postgresql
     cap_drop:
       - ALL
     cap_add:
@@ -100,7 +98,7 @@ services:
         condition: service_healthy
     environment:
       DB_HOST: db
-      DB_PORT: "5432"
+      DB_PORT: "3306"
       DB_NAME: dktax
       DB_USER: dktax_admin
       DB_PASSWORD_FILE: /run/secrets/db_password
@@ -122,11 +120,13 @@ networks:
     internal: true
 
 volumes:
-  pgdata: {}
+  dbdata: {}
 
 secrets:
   db_password:
     file: ./secrets/db_password
+  db_root_password:
+    file: ./secrets/db_root_password
   db_app_password:
     file: ./secrets/db_app_password
   nid_kek_v1:

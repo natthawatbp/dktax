@@ -6,7 +6,7 @@ DIR="$(cd "$(dirname "$0")/.." && pwd)/secrets"
 mkdir -p "$DIR"
 chmod 700 "$DIR"
 
-for name in db_password db_app_password nid_kek_v1 nid_index_key; do
+for name in db_password db_root_password db_app_password nid_kek_v1 nid_index_key; do
   f="$DIR/$name"
   if [[ -e "$f" ]]; then
     echo "exists, skipped: $name"

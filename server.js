@@ -1,5 +1,5 @@
 'use strict';
-// Server for DK One Tax Bill: static front-end plus the /api routes. Node.js built-ins except the pg driver.
+// Server for DK One Tax Bill: static front-end plus the /api routes. Node.js built-ins plus the mysql2 driver.
 // Serves ./public read-only. TLS terminates at a reverse proxy in front of this process.
 
 const http = require('node:http');
@@ -16,13 +16,12 @@ const ROOT = path.resolve(__dirname, 'public');
 // The API is enabled only when a database is configured, so the static site still runs without one.
 let api = null;
 if (process.env.DB_HOST) {
-  const { Pool } = require('pg');
+  const mysql = require('mysql2/promise');
   const { loadVault, loadPoolConfig } = require('./lib/config');
-  const { pgStore } = require('./lib/store');
+  const { mysqlStore } = require('./lib/store');
   const { createApi } = require('./lib/api');
-  const pool = new Pool(loadPoolConfig());
-  pool.on('error', (err) => console.error('database pool error:', err.code || 'unknown'));
-  api = createApi({ store: pgStore(pool), vault: loadVault() });
+  const pool = mysql.createPool(loadPoolConfig());
+  api = createApi({ store: mysqlStore(pool), vault: loadVault() });
 }
 
 // Whitelist: anything not listed here (including .md, .jsx, .json, .sh) is never served.

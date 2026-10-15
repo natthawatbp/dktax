@@ -28,9 +28,12 @@ test('missing or malformed keys fail at startup', () => {
   assert.throws(() => loadVault({ NID_KEK_V1: 'abc', NID_INDEX_KEY: hex() }), /64 hex characters/);
 });
 
-test('database password from environment; TLS only when requested', () => {
+test('database password from environment; TLS only when requested; UTC times', () => {
   const base = { DB_HOST: 'localhost', DB_NAME: 'dktax', DB_USER: 'dktax_app', DB_PASSWORD: 'x' };
-  assert.equal(loadPoolConfig(base).ssl, false);
+  const cfg = loadPoolConfig(base);
+  assert.equal(cfg.ssl, undefined);
+  assert.equal(cfg.port, 3306);
+  assert.equal(cfg.timezone, 'Z');
   assert.deepEqual(loadPoolConfig({ ...base, DB_SSL: 'require' }).ssl, { rejectUnauthorized: true });
   assert.throws(() => loadPoolConfig({ DB_HOST: 'h' }), /DB_PASSWORD or DB_PASSWORD_FILE/);
 });
