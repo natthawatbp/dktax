@@ -21,7 +21,7 @@ if (process.env.DB_HOST) {
   const { mysqlStore } = require('./lib/store');
   const { createApi } = require('./lib/api');
   const pool = mysql.createPool(loadPoolConfig());
-  api = createApi({ store: mysqlStore(pool), vault: loadVault() });
+  api = createApi({ store: mysqlStore(pool), vault: loadVault(), setupToken: process.env.SETUP_TOKEN || null });
 }
 
 // Whitelist: anything not listed here (including .md, .jsx, .json, .sh) is never served.

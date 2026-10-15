@@ -252,3 +252,34 @@ test('tampered stored ciphertext is reported as an integrity error and audited',
   assert.equal(r.body.error, 'integrity_error');
   assert.equal(store._audit.some((a) => a.action === 'integrity_failed'), true);
 });
+
+// First-admin setup. Uses a fresh API with a setup token and an empty user table.
+test('setup creates the first admin once, then the route disappears', async () => {
+  const token = crypto.randomBytes(24).toString('hex');
+  const empty = memoryStore();
+  const setupApi = createApi({ store: empty, vault, now: () => clock, setupToken: token });
+  const post = (body) => call(setupApi, { method: 'POST', url: '/api/setup', body });
+
+  assert.equal((await post({ token: 'wrong', username: 'boss1', password: PW })).status, 403);
+  assert.equal((await post({ token, username: 'boss1', password: 'short' })).status, 400);
+  assert.equal((await post({ token, username: 'B', password: PW })).status, 400);
+  const ok = await post({ token, username: 'Boss1', password: PW });
+  assert.equal(ok.status, 201);
+  assert.deepEqual(ok.body, { username: 'boss1', role: 'admin' });
+  assert.equal((await post({ token, username: 'second', password: PW })).status, 404);
+});
+
+test('setup is disabled without a long-enough token', async () => {
+  const noToken = createApi({ store: memoryStore(), vault, now: () => clock });
+  assert.equal((await call(noToken, { method: 'POST', url: '/api/setup', body: { token: 'x', username: 'boss1', password: PW } })).status, 404);
+  const shortToken = createApi({ store: memoryStore(), vault, now: () => clock, setupToken: 'short' });
+  assert.equal((await call(shortToken, { method: 'POST', url: '/api/setup', body: { token: 'short', username: 'boss1', password: PW } })).status, 404);
+});
+
+test('setup is refused when users already exist', async () => {
+  const token = crypto.randomBytes(24).toString('hex');
+  const existing = memoryStore();
+  existing.addUser({ username: 'admin', passwordHash: await hashPassword(PW), role: 'admin' });
+  const setupApi = createApi({ store: existing, vault, now: () => clock, setupToken: token });
+  assert.equal((await call(setupApi, { method: 'POST', url: '/api/setup', body: { token, username: 'boss2', password: PW } })).status, 404);
+});

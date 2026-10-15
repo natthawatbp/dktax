@@ -73,6 +73,25 @@ Plesk → Node.js → **Restart App**. Then:
 - `https://<domain>/api/me` returns 401 (no session yet). That means the API is running.
 - Log in through the API with the admin account. The response should set a `__Host-dk_sid` cookie.
 
+## 8b. First admin through the web page (no SSH needed)
+
+Use this only once, right after the database is set up. Each step is a single action.
+
+1. **Make a setup code.** Plesk → Node.js → tab **Run Node.js commands**. Run:
+   `node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"`
+   Copy the output. This is the setup code. Do not share it.
+2. **Add the setup code to Plesk.** Node.js → Custom environment variables → add `SETUP_TOKEN` with the setup code → **Restart App**.
+3. **Allow the app account to add a user, temporarily.** Open phpMyAdmin for `donkaew_dktax`, go to the **SQL** tab, run:
+   `GRANT INSERT ON donkaew_dktax.users TO 'donkaew_dktax_app'@'%';`
+   If you see an error about permissions, stop here and ask the hosting provider to run this line.
+4. **Create the admin.** Open `https://onetaxbill.donkaew.com/setup.html`, enter the setup code, a username, and a password of at least 12 characters. You should see "สร้างผู้ดูแลระบบสำเร็จ".
+5. **Take the permission back.** In phpMyAdmin, run:
+   `REVOKE INSERT ON donkaew_dktax.users FROM 'donkaew_dktax_app'@'%';`
+6. **Remove the setup code.** Delete `SETUP_TOKEN` from Plesk → **Restart App**. The setup page stops working by itself once an admin exists.
+7. **Test the login.** Open `https://onetaxbill.donkaew.com/login.html` and sign in with the new admin.
+
+After this, all other staff accounts must be created by an admin with a process still to be built. Until then, the only account that can be added is the admin set up above.
+
 ## 9. Security checklist
 - Plesk: enable HSTS for the domain (SSL/TLS settings).
 - Keep MariaDB bound to localhost. Do not open port 3306 in the firewall.
