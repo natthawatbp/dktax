@@ -1,5 +1,8 @@
-.git
-deploy
-docker-compose.yml
-Dockerfile
-*.md
+# Only the runtime bundle goes into the image. Everything else stays out.
+*
+!Index.html
+!_ds_bundle.js
+!styles.css
+!tokens
+!fonts
+!assets

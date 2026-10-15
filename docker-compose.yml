@@ -1,7 +1,27 @@
 services:
   web:
-    build: .
+    build:
+      context: .
+      pull: true
+    image: dk-one-tax-bill:local
     container_name: dk-one-tax-bill
     restart: unless-stopped
+    # Bound to loopback: expose publicly only through a TLS reverse proxy.
     ports:
-      - "${HOST_PORT:-8080}:80"
+      - "127.0.0.1:${HOST_PORT:-8080}:8080"
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 100
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
