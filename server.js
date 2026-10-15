@@ -1,0 +1,155 @@
+'use strict';
+// Static server for DK One Tax Bill. Node.js built-ins only (no npm dependencies).
+// Serves ./public read-only. TLS terminates at a reverse proxy in front of this process.
+
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const PORT = Number(process.env.PORT) || 8080;
+const HOST = process.env.HOST || '0.0.0.0';
+// Set TRUST_PROXY=1 only when a reverse proxy overwrites X-Forwarded-For.
+const TRUST_PROXY = process.env.TRUST_PROXY === '1';
+const ROOT = path.resolve(__dirname, 'public');
+
+const CSP = [
+  "default-src 'none'",
+  "script-src 'self' 'unsafe-inline' blob: https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
+  "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com",
+  "font-src 'self' blob: https://cdnjs.cloudflare.com https://fonts.gstatic.com data:",
+  "img-src 'self' data: blob: https://cdn.imagetourls.com",
+  "connect-src 'self' blob:",
+  "form-action 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+].join('; ');
+
+const SECURITY_HEADERS = {
+  'Content-Security-Policy': CSP,
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'no-referrer',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Resource-Policy': 'same-origin',
+  'X-Robots-Tag': 'noindex, nofollow, noarchive',
+};
+
+// Whitelist: anything not listed here (including .md, .jsx, .json, .sh) is never served.
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.woff2': 'font/woff2',
+};
+const BLOCKED_DIRS = new Set(['components', 'guidelines', 'ui_kits', 'uploads', 'deploy']);
+const CACHEABLE = /\.(woff2|png|css|js)$/;
+
+// Fixed-window rate limit per client. Keeps memory bounded.
+const RATE_WINDOW_MS = 1000;
+const RATE_LIMIT = 50;
+const hits = new Map();
+function rateLimited(ip) {
+  const now = Date.now();
+  let entry = hits.get(ip);
+  if (!entry || now - entry.start > RATE_WINDOW_MS) {
+    if (hits.size >= 10000) hits.clear();
+    entry = { start: now, count: 0 };
+    hits.set(ip, entry);
+  }
+  entry.count += 1;
+  return entry.count > RATE_LIMIT;
+}
+
+function clientIp(req) {
+  if (TRUST_PROXY) {
+    const xff = req.headers['x-forwarded-for'];
+    if (typeof xff === 'string' && xff.length) return xff.split(',')[0].trim();
+  }
+  return req.socket.remoteAddress || 'unknown';
+}
+
+// Map a URL path to a file inside ROOT, or null if it must not be served.
+function resolveFile(pathname) {
+  let decoded;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+  if (decoded.includes('\0')) return null;
+  if (decoded === '/' || decoded.endsWith('/')) decoded += 'Index.html';
+
+  const segments = decoded.split('/').filter(Boolean);
+  if (segments.some((s) => s.startsWith('.') || BLOCKED_DIRS.has(s))) return null;
+
+  const file = path.resolve(ROOT, '.' + path.posix.normalize('/' + decoded));
+  if (!file.startsWith(ROOT + path.sep)) return null;
+  if (!MIME[path.extname(file).toLowerCase()]) return null;
+  return file;
+}
+
+function send(res, status, body, extra = {}) {
+  res.writeHead(status, {
+    ...SECURITY_HEADERS,
+    'Content-Type': 'text/plain; charset=utf-8',
+    'Cache-Control': 'no-store',
+    ...extra,
+  });
+  res.end(body);
+}
+
+const server = http.createServer((req, res) => {
+  if (rateLimited(clientIp(req))) {
+    return send(res, 429, 'Too Many Requests', { 'Retry-After': '1' });
+  }
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return send(res, 405, 'Method Not Allowed', { Allow: 'GET, HEAD' });
+  }
+
+  let pathname;
+  try {
+    pathname = new URL(req.url, 'http://localhost').pathname;
+  } catch {
+    return send(res, 400, 'Bad Request');
+  }
+
+  const file = resolveFile(pathname);
+  if (!file) return send(res, 404, 'Not Found');
+
+  fs.stat(file, (statErr, stat) => {
+    if (statErr || !stat.isFile()) return send(res, 404, 'Not Found');
+
+    const ext = path.extname(file).toLowerCase();
+    res.writeHead(200, {
+      ...SECURITY_HEADERS,
+      'Content-Type': MIME[ext],
+      'Content-Length': stat.size,
+      'Cache-Control': CACHEABLE.test(file) ? 'public, max-age=86400' : 'no-cache',
+    });
+    if (req.method === 'HEAD') return res.end();
+
+    const stream = fs.createReadStream(file);
+    stream.on('error', () => res.destroy());
+    stream.pipe(res);
+  });
+});
+
+server.requestTimeout = 10000;
+server.headersTimeout = 10000;
+server.keepAliveTimeout = 5000;
+
+server.listen(PORT, HOST, () => {
+  console.log(`dk-one-tax-bill listening on ${HOST}:${PORT}`);
+});
+
+function shutdown() {
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 5000).unref();
+}
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);

@@ -6,14 +6,16 @@ services:
     image: dk-one-tax-bill:local
     container_name: dk-one-tax-bill
     restart: unless-stopped
+    init: true
+    environment:
+      PORT: "8080"
+      TRUST_PROXY: "1"
     # Bound to loopback: expose publicly only through a TLS reverse proxy.
     ports:
       - "127.0.0.1:${HOST_PORT:-8080}:8080"
     read_only: true
     tmpfs:
       - /tmp
-      - /var/cache/nginx
-      - /var/run
     cap_drop:
       - ALL
     security_opt:

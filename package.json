@@ -1,0 +1,14 @@
+{
+  "name": "dk-one-tax-bill",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DK One Tax Bill static front-end served by a hardened Node.js server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "UNLICENSED"
+}

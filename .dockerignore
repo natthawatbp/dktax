@@ -1,8 +1,5 @@
-# Only the runtime bundle goes into the image. Everything else stays out.
+# Allowlist: only the server and the runtime bundle go into the image.
 *
-!Index.html
-!_ds_bundle.js
-!styles.css
-!tokens
-!fonts
-!assets
+!package.json
+!server.js
+!public

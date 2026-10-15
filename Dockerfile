@@ -1,13 +1,17 @@
-# Pin the base image; bump deliberately. The -unprivileged variant runs as non-root.
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+# Pin the Node.js major; bump deliberately. Runs as the unprivileged "node" user.
+FROM node:22-alpine
 
-USER 101
+ENV NODE_ENV=production \
+    PORT=8080
 
-COPY --chown=root:root deploy/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --chown=root:root Index.html _ds_bundle.js styles.css /usr/share/nginx/html/
-COPY --chown=root:root tokens /usr/share/nginx/html/tokens
-COPY --chown=root:root fonts /usr/share/nginx/html/fonts
-COPY --chown=root:root assets /usr/share/nginx/html/assets
+WORKDIR /app
+COPY --chown=root:root package.json server.js /app/
+COPY --chown=root:root public /app/public
 
+USER node
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=3s --retries=3 CMD wget -q -O /dev/null http://127.0.0.1:8080/Index.html || exit 1
+
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+  CMD ["node", "-e", "require('http').get('http://127.0.0.1:'+(process.env.PORT||8080)+'/',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+
+CMD ["node", "server.js"]
