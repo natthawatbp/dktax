@@ -89,6 +89,7 @@
     not_found: 'ไม่พบข้อมูล',
     reason_required: 'กรุณาระบุเหตุผลอย่างน้อย 10 ตัวอักษร',
     reveal_limit: 'เปิดเลขเต็มครบจำนวนที่กำหนดในชั่วโมงนี้แล้ว ลองใหม่ภายหลัง',
+    view_limit: 'ดูข้อมูลครบ 100 รายการในชั่วโมงนี้แล้ว ลองใหม่ภายหลัง',
     too_many_requests: 'ส่งคำขอถี่เกินไป กรุณารอสักครู่',
   };
 
@@ -106,6 +107,9 @@
     return { status: r.status, data };
   }
   const errText = (data, status) => ERRORS[data.error] || (status === 429 ? ERRORS.too_many_requests : 'เกิดข้อผิดพลาด ลองใหม่อีกครั้ง');
+
+  // Shows the full ID when the server sent it (admin, revenue, finance); otherwise the masked form.
+  const describe = (d) => 'รหัสผู้เสียภาษี: ' + d.taxpayer_id + '\nเลขประจำตัว: ' + (d.national_id || d.nid_masked);
 
   function enter(user) {
     $('login-card').classList.add('hidden');
@@ -143,14 +147,14 @@
   $('lookup-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const { status, data } = await api('POST', '/api/taxpayers/lookup', { national_id: $('s-nid').value });
-    if (status === 200) showResult('รหัสผู้เสียภาษี: ' + data.taxpayer_id + '\nเลขที่บันทึก: ' + data.nid_masked);
+    if (status === 200) showResult(describe(data));
     else show('panel-msg', errText(data, status), false);
   });
   $('view-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = encodeURIComponent($('v-id').value);
     const { status, data } = await api('GET', '/api/taxpayers/' + id);
-    if (status === 200) showResult('รหัสผู้เสียภาษี: ' + data.taxpayer_id + '\nเลขที่บันทึก: ' + data.nid_masked);
+    if (status === 200) showResult(describe(data));
     else show('panel-msg', errText(data, status), false);
   });
   $('reveal-form').addEventListener('submit', async (e) => {

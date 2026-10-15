@@ -49,7 +49,7 @@ let clock;
 let cookies;
 
 beforeEach(async () => {
-  store = memoryStore();
+  store = memoryStore(() => clock);
   vault = createNationalIdVault({
     keks: { 1: crypto.randomBytes(32) }, currentVersion: 1, indexKey: crypto.randomBytes(32),
   });
@@ -166,22 +166,24 @@ test('invalid national id is refused with a generic error', async () => {
   assert.equal(JSON.stringify(r.body).includes('1234567890123'), false);
 });
 
-test('lookup by national id returns only the masked value and the taxpayer id', async () => {
+test('lookup by national id returns the full id to finance staff', async () => {
   await login('revenue');
   await call(handle, as('revenue', { method: 'POST', url: '/api/taxpayers', body: { taxpayer_id: 'tp-1', national_id: NID } }));
   await login('finance');
   const r = await call(handle, as('finance', { method: 'POST', url: '/api/taxpayers/lookup', body: { national_id: NID } }));
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { taxpayer_id: 'tp-1', nid_masked: `x-xxxx-xxxxx-xx-${NID.slice(-4)}` });
-  assert.equal(r.raw.includes(NID), false);
+  assert.deepEqual(r.body, { taxpayer_id: 'tp-1', nid_masked: `x-xxxx-xxxxx-xx-${NID.slice(-4)}`, national_id: NID });
 });
 
-test('view shows only the masked value; health staff can view but cannot lookup', async () => {
+test('full id for admin, revenue and finance; health sees it masked and cannot lookup', async () => {
   await login('revenue');
   await call(handle, as('revenue', { method: 'POST', url: '/api/taxpayers', body: { taxpayer_id: 'tp-1', national_id: NID } }));
+  const own = await call(handle, as('revenue', { url: '/api/taxpayers/tp-1' }));
+  assert.equal(own.body.national_id, NID);
   await login('health');
   const view = await call(handle, as('health', { url: '/api/taxpayers/tp-1' }));
   assert.equal(view.status, 200);
+  assert.equal(view.body.national_id, undefined);
   assert.equal(view.raw.includes(NID.slice(0, 9)), false);
   const lookup = await call(handle, as('health', { method: 'POST', url: '/api/taxpayers/lookup', body: { national_id: NID } }));
   assert.equal(lookup.status, 403);
@@ -282,4 +284,18 @@ test('setup is refused when users already exist', async () => {
   existing.addUser({ username: 'admin', passwordHash: await hashPassword(PW), role: 'admin' });
   const setupApi = createApi({ store: existing, vault, now: () => clock, setupToken: token });
   assert.equal((await call(setupApi, { method: 'POST', url: '/api/setup', body: { token, username: 'boss2', password: PW } })).status, 404);
+});
+
+test('an account cannot open more than 100 records per hour', async () => {
+  await login('revenue');
+  await call(handle, as('revenue', { method: 'POST', url: '/api/taxpayers', body: { taxpayer_id: 'tp-1', national_id: NID } }));
+  for (let i = 0; i < 100; i++) {
+    assert.equal((await call(handle, as('revenue', { url: '/api/taxpayers/tp-1' }))).status, 200);
+  }
+  const blocked = await call(handle, as('revenue', { url: '/api/taxpayers/tp-1' }));
+  assert.equal(blocked.status, 429);
+  assert.equal(blocked.body.error, 'view_limit');
+  clock = new Date(clock.getTime() + 61 * 60 * 1000);
+  await login('revenue');
+  assert.equal((await call(handle, as('revenue', { url: '/api/taxpayers/tp-1' }))).status, 200);
 });

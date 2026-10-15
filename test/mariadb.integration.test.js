@@ -106,7 +106,7 @@ test('end to end: create, lookup, view, reveal, with no plaintext in the databas
 
   const viewed = await call('/api/taxpayers/tp-100', { cookie: revenue });
   assert.equal(viewed.status, 200);
-  assert.equal(viewed.raw.includes(NID.slice(0, 9)), false);
+  assert.equal(viewed.body.national_id, NID); // revenue staff see the full ID by policy
 
   const [rows] = await admin.query('SELECT * FROM taxpayers WHERE taxpayer_id = ?', ['tp-100']);
   const stored = JSON.stringify(rows[0]);

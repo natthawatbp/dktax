@@ -111,14 +111,15 @@ Enabled when `DB_HOST` is set. Without it, `/api/*` returns 404 and the static s
 | `POST /api/logout` | any session | Deletes the session. |
 | `GET /api/me` | any session | Current user and role. |
 | `POST /api/taxpayers` | admin, revenue | Registers a taxpayer. Body: `{taxpayer_id, national_id}`. Returns only the masked ID. |
-| `POST /api/taxpayers/lookup` | admin, revenue, finance | Finds a taxpayer by national ID through the blind index. Returns the masked ID. |
-| `GET /api/taxpayers/:id` | admin, revenue, finance, health, exec | Returns the masked ID. Decrypts internally and audits the view. |
+| `POST /api/taxpayers/lookup` | admin, revenue, finance | Finds a taxpayer by national ID through the blind index. Returns the full ID and the masked form. |
+| `GET /api/taxpayers/:id` | admin, revenue, finance, health, exec | Returns the full ID to admin, revenue and finance, and only the masked form to health and exec. Audited. |
 | `POST /api/taxpayers/:id/reveal` | admin | Returns the full ID. Requires `{reason}` of 10 to 200 characters. Limited to 10 per hour. Audited. |
 | `GET /api/audit?limit=` | admin | Recent audit rows. |
 
 Rules that apply to every route:
 - Roles are checked on the server. The UI is not trusted.
 - Writes require `Content-Type: application/json`. Together with `SameSite=Strict`, this blocks cross-site form posts.
+- Each account can open at most 100 records (views plus lookups) per hour, so a stolen account cannot dump the whole table. Over the limit returns `view_limit`.
 - Errors return a short code (`invalid_credentials`, `forbidden`, ...) with no internal detail.
 - National IDs never appear in logs, audit rows or error messages.
 
