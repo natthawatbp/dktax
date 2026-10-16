@@ -10,3 +10,5 @@ GRANT UPDATE (failed_logins, locked_until, password_hash, must_change_password, 
               totp_secret, totp_enabled, totp_last_step) ON dktax.users TO 'dktax_app'@'%';
 GRANT SELECT, INSERT, DELETE ON dktax.sessions TO 'dktax_app'@'%';
 GRANT SELECT, INSERT ON dktax.audit_log TO 'dktax_app'@'%';
+GRANT SELECT, INSERT ON dktax.password_reset_requests TO 'dktax_app'@'%';
+GRANT UPDATE (closed) ON dktax.password_reset_requests TO 'dktax_app'@'%';

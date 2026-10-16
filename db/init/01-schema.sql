@@ -39,6 +39,16 @@ CREATE TABLE IF NOT EXISTS sessions (
   CONSTRAINT token_hash_format CHECK (token_hash REGEXP '^[0-9a-f]{64}$')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Forgot-password requests. An admin sees them and sets a temporary password.
+CREATE TABLE IF NOT EXISTS password_reset_requests (
+  id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  user_id      BIGINT UNSIGNED NOT NULL,
+  requested_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  closed       TINYINT(1) NOT NULL DEFAULT 0,
+  INDEX reset_user_idx (user_id, closed),
+  CONSTRAINT reset_user_fk FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Append-only audit trail. The app user can INSERT and SELECT only. The triggers also block
 -- UPDATE and DELETE for any account that is granted them by mistake.
 CREATE TABLE IF NOT EXISTS audit_log (

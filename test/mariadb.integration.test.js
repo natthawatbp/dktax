@@ -58,7 +58,7 @@ before(async () => {
   app = mysql.createPool({ uri: process.env.TEST_APP_URL, connectionLimit: 5, ...UTC });
   // Fixtures. TRUNCATE does not fire the row triggers, so the test can reset audit_log.
   await admin.query('SET FOREIGN_KEY_CHECKS = 0');
-  for (const t of ['audit_log', 'sessions', 'taxpayers', 'users']) await admin.query(`TRUNCATE TABLE ${t}`);
+  for (const t of ['audit_log', 'password_reset_requests', 'sessions', 'taxpayers', 'users']) await admin.query(`TRUNCATE TABLE ${t}`);
   await admin.query('SET FOREIGN_KEY_CHECKS = 1');
   const vault = createNationalIdVault({
     keks: { 1: crypto.randomBytes(32) }, currentVersion: 1, indexKey: crypto.randomBytes(32),
@@ -228,7 +228,7 @@ test('staff management on a real database: add, force change, close, list', { sk
 
 test('first start on an empty database creates the admin once, with a forced password change', { skip }, async () => {
   await admin.query('SET FOREIGN_KEY_CHECKS = 0');
-  for (const t of ['sessions', 'users']) await admin.query(`TRUNCATE TABLE ${t}`);
+  for (const t of ['password_reset_requests', 'sessions', 'users']) await admin.query(`TRUNCATE TABLE ${t}`);
   await admin.query('SET FOREIGN_KEY_CHECKS = 1');
   const quiet = { log() {}, warn() {}, error() {} };
   const store = mysqlStore(app);
@@ -241,4 +241,23 @@ test('first start on an empty database creates the admin once, with a forced pas
   assert.equal(await bootstrapAdmin({ store, env: { ADMIN_INITIAL_PASSWORD: 'different-temp-password' }, log: quiet }), 'users_exist');
   const [[count]] = await admin.query('SELECT COUNT(*) AS n FROM users');
   assert.equal(Number(count.n), 1);
+});
+
+test('forgot password: one open request per person, listed for admins, closed by a temporary password', { skip }, async () => {
+  await admin.query("DELETE FROM users WHERE username IN ('forgetful', 'boss2')");
+  await admin.query("INSERT INTO users (username, password_hash, role) VALUES ('forgetful', ?, 'revenue'), ('boss2', ?, 'admin')",
+    [await hashPassword(PW), await hashPassword(PW)]);
+  const ask = (username) => call('/api/password/forgot', { method: 'POST', body: { username } });
+  for (const name of ['forgetful', 'forgetful', 'nobody-here']) assert.equal((await ask(name)).status, 200);
+  const [[open]] = await admin.query("SELECT COUNT(*) AS n FROM password_reset_requests r JOIN users u ON u.id = r.user_id WHERE u.username = 'forgetful' AND r.closed = 0");
+  assert.equal(Number(open.n), 1);
+
+  const adminCookie = await login('boss2');
+  const list = await call('/api/password/requests', { cookie: adminCookie });
+  assert.deepEqual(list.body.requests.map((r) => r.username), ['forgetful']);
+  const set = await call('/api/users/forgetful/password', { method: 'POST', cookie: adminCookie, body: { password: 'temporary-password-123' } });
+  assert.equal(set.status, 200);
+  assert.equal((await call('/api/password/requests', { cookie: adminCookie })).body.requests.length, 0);
+  const [[closed]] = await admin.query("SELECT COUNT(*) AS n FROM password_reset_requests WHERE closed = 1");
+  assert.equal(Number(closed.n), 1);
 });

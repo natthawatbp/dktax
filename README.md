@@ -11,7 +11,7 @@ Entry point: `public/Index.html` (self-contained bundle).
 - `public/` — runtime bundle served to browsers (`Index.html`, `_ds_bundle.js`, `styles.css`, `tokens/`, `fonts/`, `assets/`)
 - `Dockerfile`, `docker-compose.yml`, `.dockerignore` — container build (allowlist: only `package.json`, `server.js`, `public/` go into the image)
 - `deploy/deploy.sh` — sync to VPS and rebuild the container over SSH
-- `components/`, `guidelines/`, `ui_kits/`, `readme.md`, `SKILL.md` — design-source material, not served
+- `components/`, `guidelines/`, `ui_kits/`, `design-reference/`, `readme.md`, `SKILL.md` — design-source material, not served. `design-reference/Index.html` is the original prototype page and is not connected to the server.
 
 ## Data storage
 
@@ -116,6 +116,8 @@ Enabled when `DB_HOST` is set. Without it, `/api/*` returns 404 and the static s
 | `POST /api/mfa/setup` | any session | Starts OTP setup and returns the setup key for an authenticator app. |
 | `POST /api/mfa/enable` | any session | Confirms setup with a code from the app. |
 | `POST /api/password` | any session | Changes the password. Needs the current one and ends every session. |
+| `POST /api/password/forgot` | anyone | Records a "forgot password" request. Always answers the same, so usernames cannot be probed. |
+| `GET /api/password/requests` | admin | Open forgot-password requests. Setting a temporary password closes them. |
 | `GET /api/users` | admin | Staff list (never includes passwords or OTP secrets). |
 | `POST /api/users` | admin | Adds staff with a temporary password. The person must change it at first sign-in. |
 | `POST /api/users/:username/disable`, `/enable` | admin | Closes or reopens an account. Closing ends its sessions immediately. |

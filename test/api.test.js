@@ -484,3 +484,40 @@ test('the staff list is admin-only and never exposes secrets', async () => {
   assert.deepEqual(list.body.users.map((u) => u.username), ['admin', 'finance', 'health', 'revenue']);
   assert.equal(/password_hash|totp_secret|scrypt/.test(list.raw), false);
 });
+
+// ---------- forgot password ----------
+test('forgot password answers the same for known, unknown, closed and malformed names', async () => {
+  await login('admin');
+  await call(handle, as('admin', { method: 'POST', url: '/api/users/finance/disable', body: {} }));
+  const ask = (username) => call(handle, { method: 'POST', url: '/api/password/forgot', body: { username } });
+  const answers = [];
+  for (const name of ['revenue', 'nobody', 'finance', 'NOT A NAME!!', '']) answers.push(await ask(name));
+  for (const a of answers) {
+    assert.equal(a.status, 200);
+    assert.deepEqual(a.body, { ok: true });
+  }
+  const list = await call(handle, as('admin', { url: '/api/password/requests' }));
+  assert.deepEqual(list.body.requests.map((r) => r.username), ['revenue']); // only the real, open account
+});
+
+test('repeating the request does not add more rows, and the list is admin-only', async () => {
+  const ask = () => call(handle, { method: 'POST', url: '/api/password/forgot', body: { username: 'revenue' } });
+  await ask(); await ask(); await ask();
+  await login('admin');
+  await login('revenue');
+  assert.equal((await call(handle, as('revenue', { url: '/api/password/requests' }))).status, 403);
+  assert.equal((await call(handle, { url: '/api/password/requests' })).status, 401);
+  assert.equal((await call(handle, as('admin', { url: '/api/password/requests' }))).body.requests.length, 1);
+});
+
+test('setting a temporary password closes the request, and a new one can then be made', async () => {
+  const ask = () => call(handle, { method: 'POST', url: '/api/password/forgot', body: { username: 'revenue' } });
+  await ask();
+  await login('admin');
+  const set = await call(handle, as('admin', { method: 'POST', url: '/api/users/revenue/password', body: { password: 'temporary-password-123' } }));
+  assert.equal(set.status, 200);
+  assert.equal((await call(handle, as('admin', { url: '/api/password/requests' }))).body.requests.length, 0);
+  await ask();
+  assert.equal((await call(handle, as('admin', { url: '/api/password/requests' }))).body.requests.length, 1);
+  assert.equal(store._audit.filter((a) => a.action === 'password_forgot').length, 2);
+});

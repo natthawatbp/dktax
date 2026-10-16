@@ -83,7 +83,7 @@ The system creates the first admin by itself the first time it starts with an em
    - `ADMIN_INITIAL_PASSWORD` = the temporary password
    - `ADMIN_USERNAME` = the name for the first admin (optional; the default is `admin`)
 3. Press **Restart App**. The first admin is created now. (The database tables must already exist, see section 6.)
-4. Open `https://onetaxbill.donkaew.com/login.html` and sign in with that username and the temporary password.
+4. Open `https://onetaxbill.donkaew.com/` and sign in with that username and the temporary password.
 5. The page asks for a new password. Choose your own (at least 12 characters). You are signed out; sign in again with the new password.
 6. The page asks you to set up OTP. Follow section 8c.
 7. **Remove `ADMIN_INITIAL_PASSWORD` from Plesk** and press **Restart App**. If you forget, nothing breaks: it is ignored once any user exists. But the temporary password should not stay in Plesk.
@@ -102,7 +102,7 @@ OTP is on by default. Every account must set up an authenticator app before it c
 3. Upload the new files into `dk-one-tax-bill`, press **NPM install**, then **Restart App**.
 
 **What each person does the first time they sign in:**
-1. Sign in at `/login.html` with the username and password.
+1. Sign in at the front page `/` with the username and password.
 2. The page asks for OTP setup. Press **เริ่มตั้งค่า**.
 3. On the phone, open Google Authenticator or Microsoft Authenticator → add an account → enter a setup key. Type the key shown on the page.
 4. Type the 6-digit code the app shows, and press confirm.
@@ -118,7 +118,7 @@ OTP is on by default. Every account must set up an authenticator app before it c
 
 **One-time database update (existing databases only):** in phpMyAdmin → SQL tab, run `db/migrations/002-user-management.sql`. It is safe to run twice.
 
-**What an admin can do on `/login.html`, in the section "จัดการเจ้าหน้าที่":**
+**What an admin can do on the front page `/`, in the section "จัดการเจ้าหน้าที่":**
 - **Add a staff member:** username, role, and a temporary password of at least 12 characters. Tell the person the temporary password directly (in person or by phone), never in a public chat.
 - **See the list:** shows each person's role, whether OTP is on, and whether they still have a temporary password. It never shows passwords.
 - **Close an account:** the person is signed out at once and cannot sign in again. Use this when someone leaves. An admin cannot close their own account.
@@ -131,6 +131,21 @@ OTP is on by default. Every account must set up an authenticator app before it c
 3. The page asks to set up OTP. Follow the steps in section 8c.
 
 **Database permission:** the app account now needs `INSERT` on `users` permanently (it can no longer be taken back after the first admin), and `UPDATE` on the columns `password_hash`, `must_change_password` and `disabled`. It never needs to change `role`. On Plesk the account already has full rights; the lines in `db/init/02-grants.sql` are what to ask the hosting provider to apply when you restrict it.
+
+## 8e. Forgot password
+
+On the front page, a person who forgot the password presses **ลืมรหัสผ่าน?**, types the username and sends the request. The page always answers the same way, whether the username exists or not, so it cannot be used to find out who has an account.
+
+There is no email or SMS in this system. The request appears in the admin's section **คำขอรีเซ็ตรหัสผ่าน**:
+1. The admin presses **แสดงคำขอ** and sees who asked.
+2. Press **ตั้งรหัสชั่วคราว** next to the name. The name is filled into the form below.
+3. Type a temporary password (at least 12 characters) and press the button. The request closes.
+4. The admin tells the person the temporary password directly (in person or by phone). Check that it really is that person before giving it.
+5. The person signs in with it and must choose their own password. Their OTP is not reset; if they also lost the phone, use **รีเซ็ต OTP ของเจ้าหน้าที่** as well.
+
+**Database update (existing databases only):** in phpMyAdmin → SQL tab run `db/migrations/003-password-reset-requests.sql`. It is safe to run twice. Run 001 and 002 first if they were never run.
+
+If the only admin forgets the password, nobody can approve their own request. Use the recovery steps at the end of section 8b.
 
 ## 9. Security checklist
 - Plesk: enable HSTS for the domain (SSL/TLS settings).
