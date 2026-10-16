@@ -20,11 +20,14 @@ if (process.env.DB_HOST) {
   const { loadVault, loadAppKey, loadPoolConfig } = require('./lib/config');
   const { mysqlStore } = require('./lib/store');
   const { createApi } = require('./lib/api');
+  const { bootstrapAdmin } = require('./lib/bootstrap');
   const pool = mysql.createPool(loadPoolConfig());
+  const dbStore = mysqlStore(pool);
+  // First start only: create the first admin from ADMIN_INITIAL_PASSWORD (see docs/PLESK.md).
+  bootstrapAdmin({ store: dbStore }).catch((err) => console.error('first-admin setup failed:', err.code || err.name));
   api = createApi({
-    store: mysqlStore(pool),
+    store: dbStore,
     vault: loadVault(),
-    setupToken: process.env.SETUP_TOKEN || null,
     appKey: loadAppKey(),
     // OTP is required for every account unless explicitly switched off with MFA_REQUIRED=0.
     requireMfa: process.env.MFA_REQUIRED !== '0',

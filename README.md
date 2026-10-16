@@ -101,6 +101,10 @@ docker compose up -d --build
 - `read_only` on the database container and the capability list were written from the official image's documentation but not run. Confirm with `docker compose up` on the VPS before relying on them.
 - `secrets/` lives on the VPS disk. Use a secret manager or KMS when one is available.
 
+## First admin
+
+On the first start with an empty user list, the server creates one admin from the environment variable `ADMIN_INITIAL_PASSWORD` (and optionally `ADMIN_USERNAME`, default `admin`). That account must replace the password at its first sign-in and then set up OTP. The variable is read only while no user exists; remove it after the first sign-in. See `docs/PLESK.md` section 8b.
+
 ## API
 
 Enabled when `DB_HOST` is set. Without it, `/api/*` returns 404 and the static site still works.

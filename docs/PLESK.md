@@ -33,6 +33,7 @@ Click **NPM install**. It installs the exact versions from `package-lock.json`.
 | `DB_SSL` | `require` only if the database is remote and has TLS. Leave it unset for localhost |
 | `NID_KEK_V1` | 64 hex chars, see step 5 |
 | `NID_INDEX_KEY` | 64 hex chars, see step 5 |
+| `ADMIN_INITIAL_PASSWORD` | only for the first start, see section 8b. Remove it after the first sign-in |
 
 Plesk does not provide Docker secret files, so these are plain environment variables. Anyone with Plesk admin access can read them. Limit Plesk access accordingly.
 
@@ -73,24 +74,23 @@ Plesk → Node.js → **Restart App**. Then:
 - `https://<domain>/api/me` returns 401 (no session yet). That means the API is running.
 - Log in through the API with the admin account. The response should set a `__Host-dk_sid` cookie.
 
-## 8b. First admin through the web page (no SSH needed)
+## 8b. First admin (no setup page, no commands)
 
-Use this only once, right after the database is set up. Each step is a single action.
+The system creates the first admin by itself the first time it starts with an empty user list. You only choose a temporary password. The admin must replace it right after the first sign-in.
 
-1. **Make a setup code.** Plesk → Node.js → tab **Run Node.js commands**. Run:
-   `node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"`
-   Copy the output. This is the setup code. Do not share it.
-2. **Add the setup code to Plesk.** Node.js → Custom environment variables → add `SETUP_TOKEN` with the setup code → **Restart App**.
-3. **Allow the app account to add a user, temporarily.** Open phpMyAdmin for `donkaew_dktax`, go to the **SQL** tab, run:
-   `GRANT INSERT ON donkaew_dktax.users TO 'donkaew_dktax_app'@'%';`
-   If you see an error about permissions, stop here and ask the hosting provider to run this line.
-4. **Create the admin.** Open `https://onetaxbill.donkaew.com/setup.html`, enter the setup code, a username, and a password of at least 12 characters. You should see "สร้างผู้ดูแลระบบสำเร็จ".
-5. **Take the permission back.** In phpMyAdmin, run:
-   `REVOKE INSERT ON donkaew_dktax.users FROM 'donkaew_dktax_app'@'%';`
-6. **Remove the setup code.** Delete `SETUP_TOKEN` from Plesk → **Restart App**. The setup page stops working by itself once an admin exists.
-7. **Test the login.** Open `https://onetaxbill.donkaew.com/login.html` and sign in with the new admin.
+1. Choose a temporary password of at least 12 characters. It is used once. Do not reuse a real password.
+2. Plesk → Node.js → **Custom environment variables** → add:
+   - `ADMIN_INITIAL_PASSWORD` = the temporary password
+   - `ADMIN_USERNAME` = the name for the first admin (optional; the default is `admin`)
+3. Press **Restart App**. The first admin is created now. (The database tables must already exist, see section 6.)
+4. Open `https://onetaxbill.donkaew.com/login.html` and sign in with that username and the temporary password.
+5. The page asks for a new password. Choose your own (at least 12 characters). You are signed out; sign in again with the new password.
+6. The page asks you to set up OTP. Follow section 8c.
+7. **Remove `ADMIN_INITIAL_PASSWORD` from Plesk** and press **Restart App**. If you forget, nothing breaks: it is ignored once any user exists. But the temporary password should not stay in Plesk.
 
-After this, all other staff accounts must be created by an admin with a process still to be built. Until then, the only account that can be added is the admin set up above.
+The Node.js log shows one line, `Created the first admin ...`, and never prints the password. If instead it says the password must be 12-128 characters, fix the variable and restart.
+
+**If you lose all access** (for example the only admin forgets the password and the phone): in phpMyAdmin → SQL tab run `DELETE FROM sessions; DELETE FROM users;` and then repeat steps 1 to 7. This removes every staff account (they must be added again) but does not touch taxpayer data or the audit log.
 
 ## 8c. Turn on OTP (one-time codes) for everyone
 

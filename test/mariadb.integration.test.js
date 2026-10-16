@@ -13,6 +13,7 @@ const { createNationalIdVault, checkDigit } = require('../lib/national-id-vault'
 const { mysqlStore } = require('../lib/store');
 const { hashPassword } = require('../lib/passwords');
 const totp = require('../lib/totp');
+const { bootstrapAdmin } = require('../lib/bootstrap');
 
 const enabled = Boolean(process.env.TEST_ADMIN_URL && process.env.TEST_APP_URL);
 const skip = enabled ? false : 'set TEST_ADMIN_URL and TEST_APP_URL to run';
@@ -223,4 +224,21 @@ test('staff management on a real database: add, force change, close, list', { sk
   assert.equal((await call('/api/me', { cookie: staffCookie })).status, 401); // existing session no longer works
   const [sessions] = await admin.query('SELECT COUNT(*) AS n FROM sessions s JOIN users u ON u.id = s.user_id WHERE u.username = ?', ['newstaff']);
   assert.equal(Number(sessions[0].n), 0);
+});
+
+test('first start on an empty database creates the admin once, with a forced password change', { skip }, async () => {
+  await admin.query('SET FOREIGN_KEY_CHECKS = 0');
+  for (const t of ['sessions', 'users']) await admin.query(`TRUNCATE TABLE ${t}`);
+  await admin.query('SET FOREIGN_KEY_CHECKS = 1');
+  const quiet = { log() {}, warn() {}, error() {} };
+  const store = mysqlStore(app);
+  const env = { ADMIN_INITIAL_PASSWORD: 'first-admin-temp-pass' };
+  assert.equal(await bootstrapAdmin({ store, env, log: quiet }), 'created');
+  const [[row]] = await admin.query("SELECT role, must_change_password, password_hash FROM users WHERE username = 'admin'");
+  assert.equal(row.role, 'admin');
+  assert.equal(row.must_change_password, 1);
+  assert.equal(row.password_hash.includes('first-admin-temp-pass'), false);
+  assert.equal(await bootstrapAdmin({ store, env: { ADMIN_INITIAL_PASSWORD: 'different-temp-password' }, log: quiet }), 'users_exist');
+  const [[count]] = await admin.query('SELECT COUNT(*) AS n FROM users');
+  assert.equal(Number(count.n), 1);
 });
